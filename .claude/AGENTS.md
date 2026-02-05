@@ -36,6 +36,21 @@ You (the agent) orchestrate all workflows:
 
 For skill authoring best practices, see [Anthropic's guide](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices).
 
+## Available MCP Tools
+
+MCP (Model Context Protocol) servers provide additional capabilities. Configured in `.mcp.json`:
+
+- **review-gate-v2**: Code review automation and quality gates
+- **wix-design-system-mcp**: WDS component documentation and examples
+- **wix-internal-docs**: Wix internal documentation access
+- **MCP-S**: Wix toolkit integration (lazy-dev)
+- **chrome-devtools**: Browser DevTools integration for debugging
+- **octocode**: Advanced code research and exploration
+- **pdf-reader**: PDF document processing and extraction
+- **browsermcp**: Browser automation capabilities
+
+See [docs/HANDBOOK.md](docs/HANDBOOK.md) for MCP vs Skills comparison.
+
 ## Key Documentation
 
 - [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - End-to-end workflow examples showing skills in action
