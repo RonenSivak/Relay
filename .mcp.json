@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "review-gate-v2": {
+      "command": "/Users/ronensi/cursor-extensions/review-gate-v2/venv/bin/python",
+      "args": [
+        "/Users/ronensi/cursor-extensions/review-gate-v2/review_gate_v2_mcp.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/ronensi/cursor-extensions/review-gate-v2",
+        "PYTHONUNBUFFERED": "1",
+        "REVIEW_GATE_MODE": "cursor_integration"
+      }
+    },
+    "wix-design-system-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@wix/design-system-mcp"
+      ]
+    },
+    "wix-internal-docs": {
+      "command": "npx",
+      "args": [
+        "@wix/internal-docs-mcp"
+      ]
+    },
+    "MCP-S": {
+      "url": "https://mcp-s.wewix.net/mcp?toolkit=ronensi%40wix.com%3Alazy-dev",
+      "headers": {}
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["chrome-devtools-mcp@latest"]
+    },
+    "octocode": {
+      "command": "npx",
+      "args": ["octocode-mcp@latest"]
+    },
+    "pdf-reader": {
+      "command": "npx",
+      "args": ["@sylphx/pdf-reader-mcp"]
+    },
+    "browsermcp": {
+      "command": "npx",
+      "args": ["@browsermcp/mcp@latest"]
+    }
+  }
+}
