@@ -27,6 +27,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
 | **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
 | **figma-to-code** | Convert Figma designs to React code using WDS. Orchestrates Figma MCP, WDS MCP, Context7, wix-internal-docs | [SKILL.md](.cursor/skills/figma-to-code/SKILL.md) |
+| **code-review** | Systematic code review for PRs and local changes with separate frontend/backend paths. Integrates GitHub (read-only), Jira, Slack | [SKILL.md](.cursor/skills/code-review/SKILL.md) |
 
 ## MCP Servers
 
