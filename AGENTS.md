@@ -23,7 +23,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **brainstorming** | ALWAYS first. Clarifies intent, explores approaches, validates design | [SKILL.md](.cursor/skills/brainstorming/SKILL.md) |
 | **deep-search** | Forensic code investigation: definition hunting, pattern discovery, cross-repo analogy, bug hunting | [SKILL.md](.cursor/skills/deep-search/SKILL.md) |
 | **debugging** | Systematic debugging: browser/server errors, performance issues, production incidents. Orchestrates Chrome DevTools, Grafana, Loki, Root Cause, Slack, Jira MCPs | [SKILL.md](.cursor/skills/debugging/SKILL.md) |
-| **js-testing** | Unit/integration tests: Jest, Vitest, RTL, Ambassador, WDS testkits. Adapts to existing patterns or introduces BDD architecture | [SKILL.md](.cursor/skills/js-testing/SKILL.md) |
+| **unit-testing** | Unit/integration tests: Jest, Vitest, RTL, Ambassador, WDS testkits. Adapts to existing patterns or introduces BDD architecture | [SKILL.md](.cursor/skills/unit-testing/SKILL.md) |
 | **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
 | **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
 
@@ -38,7 +38,6 @@ Configured in `.cursor/mcp.json`. MCP provides tools; skills provide knowledge o
 | **MCP-S** | Wix toolkit: Grafana, Loki, Jira, Slack, DevEx, DB, Figma, Root Cause |
 | **wix-design-system-mcp** | WDS component documentation and examples |
 | **wix-internal-docs** | Wix internal documentation access |
-| **review-gate-v2** | Code review automation and quality gates |
 | **pdf-reader** | PDF document processing and extraction |
 | **browsermcp** | Browser automation (Playwright-based) |
 

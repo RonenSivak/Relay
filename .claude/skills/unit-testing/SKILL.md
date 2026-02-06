@@ -1,5 +1,5 @@
 ---
-name: js-testing
+name: unit-testing
 description: JavaScript/TypeScript testing skill for unit and integration tests. Adapts to existing test patterns or introduces BDD architecture (driver/builder/spec) when none exist. Use when asked to: (1) Write tests for code, (2) TDD workflow, (3) Review or improve tests, (4) Fix failing or flaky tests. Covers Jest, Vitest, React Testing Library, Wix Ambassador (HTTP/RPC), WDS testkits, and @wix/patterns.
 ---
 
