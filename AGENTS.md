@@ -28,6 +28,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
 | **figma-to-code** | Convert Figma designs to React code using WDS. Orchestrates Figma MCP, WDS MCP, Context7, wix-internal-docs | [SKILL.md](.cursor/skills/figma-to-code/SKILL.md) |
 | **code-review** | Systematic code review for PRs and local changes with separate frontend/backend paths. Integrates GitHub (read-only), Jira, Slack | [SKILL.md](.cursor/skills/code-review/SKILL.md) |
+| **e2e-testing** | E2E browser testing with Sled 2/3 or Playwright. Full lifecycle: write, run, debug, maintain. WDS browser testkits, page object pattern | [SKILL.md](.cursor/skills/e2e-testing/SKILL.md) |
 | **api-discovery** | Discover Wix APIs, FQDNs, ambassador/SDK packages, and service contracts. Orchestrates docs-schema, octocode, devex, wix-internal-docs MCPs | [SKILL.md](.cursor/skills/api-discovery/SKILL.md) |
 
 ## MCP Servers
