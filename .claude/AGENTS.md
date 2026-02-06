@@ -50,6 +50,7 @@ You (the agent) orchestrate all workflows:
 - **brainstorming**: ALWAYS use first for Clarify step. See [docs/skills/brainstorming.md](docs/skills/brainstorming.md)
 - **wds-docs**: Wix Design System component reference. See [docs/skills/wds-docs.md](docs/skills/wds-docs.md)
 - **deep-search**: Forensic code investigation with octocode-mcp and mcps-mcp. Use for definition hunting, pattern discovery, cross-repo analogy, and bug hunting. See [skills/deep-search/SKILL.md](skills/deep-search/SKILL.md)
+- **js-testing**: JavaScript/TypeScript testing with BDD architecture (driver/builder/spec). Adapts to existing patterns or introduces get/given/when structure. See [skills/js-testing/SKILL.md](skills/js-testing/SKILL.md)
 
 For skill authoring best practices, see [Anthropic's guide](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices).
 
