@@ -58,29 +58,10 @@ REPRODUCE → OBSERVE → HYPOTHESIZE → TEST → VERIFY
 ```
 
 1. **Reproduce**: Try the simplest, most direct action to see the problem firsthand
-2. **Observe**: Gather evidence — **read error messages and stack traces completely**, don't skim. Note line numbers, file paths, error codes. They often contain the answer.
-3. **Hypothesize**: Form **one** theory. State it clearly: "X is the cause because Y." Wix docs (`search_docs`) can feed hypotheses here (may find nothing, that's fine). Also: find similar **working** code in the codebase and compare — what's different?
-4. **Test**: Make the **smallest possible change** to test one hypothesis. One variable at a time. If it fails, form a **new** hypothesis — don't pile fixes on top.
+2. **Observe**: Gather evidence from what you see (errors, console, network, UI state)
+3. **Hypothesize**: Form a theory — Wix docs (`search_docs`) can feed hypotheses here (may find nothing, that's fine)
+4. **Test**: Validate or invalidate the theory with targeted checks
 5. **Verify**: Confirm the fix resolves the issue without side effects
-
-## Debugging Discipline
-
-**No fix without root cause.** If you haven't identified why it's broken, you aren't ready to fix it. Symptom fixes mask the real problem.
-
-**One change at a time.** Never apply multiple fixes at once — you can't isolate what worked and you risk introducing new bugs.
-
-**3 failed fixes = stop.** If three attempts haven't worked, the problem is likely deeper than you think. Stop, reassess your understanding, and consider:
-- Is the root cause somewhere else entirely?
-- Are you fixing symptoms instead of the source?
-- Does the approach/architecture need rethinking?
-- Should you escalate or ask for help?
-
-**Red flags — stop and go back to Observe if you catch yourself thinking:**
-- "Let me just try this quick fix"
-- "It's probably X" (without evidence)
-- "I'll add another fix on top of the last one"
-- "I don't fully understand but this might work"
-- "This seems simple, I'll skip investigation"
 
 ## Tool Selection Guide
 
@@ -243,14 +224,10 @@ When a request fails end-to-end:
 |-------------|----------------|
 | Jumping to Loki/Slack/Prometheus before reproducing | **Reproduce first**: open the page, call the API, click the button |
 | Overcomplicating with indirect tools | Start with the simplest, most direct action |
-| Skimming error messages / stack traces | **Read them completely.** Line numbers and error codes often contain the answer |
 | Guessing the cause without evidence | Observe first: logs, metrics, network |
-| Applying a fix without understanding root cause | Investigate **why** it's broken before changing anything |
-| Multiple fixes at once | **One change at a time.** You can't isolate what worked otherwise |
-| Piling fix on top of failed fix | Form a **new** hypothesis. Don't compound attempts |
 | Fixing symptoms instead of root cause | Trace to the actual source |
 | Debugging in production directly | Reproduce locally first when possible |
-| 3+ failed fix attempts without reassessing | **Stop.** Question your understanding, the approach, or escalate |
+| Ignoring error patterns | Use `find_error_pattern_logs` to spot trends |
 | Not checking recent deployments | Always correlate with deployment timeline |
 | Solo debugging for too long | Search Slack for similar issues, ask team |
 

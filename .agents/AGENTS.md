@@ -1,0 +1,49 @@
+# Relay - Workflow Orchestration Repository
+
+Skills-based workflow orchestration where individual skills combine to create complete flows.
+
+> For foundational concepts (planning, skills vs MCP, context management, model selection), see the [Coding Agents Handbook](.cursor/docs/HANDBOOK.md).
+
+## Workflow Pattern
+
+ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
+
+| Step | What to do |
+|------|-----------|
+| **Clarify** | ALWAYS invoke `/brainstorming` first — even when the user directly invokes another skill |
+| **Plan** | Create structured plan with specific steps |
+| **Execute** | Run the workflow using appropriate skills |
+| **VERIFY** | Validate results per [VERIFICATION.md](.cursor/docs/VERIFICATION.md). If uncertain, consult user |
+| **Publish** | Present findings + (if code changes) create plan.md → ask approval → implement |
+
+## Available Skills
+
+| Skill | When to use | Reference |
+|-------|------------|-----------|
+| **brainstorming** | ALWAYS first. Clarifies intent, explores approaches, validates design | [SKILL.md](.cursor/skills/brainstorming/SKILL.md) |
+| **deep-search** | Forensic code investigation: definition hunting, pattern discovery, cross-repo analogy, bug hunting | [SKILL.md](.cursor/skills/deep-search/SKILL.md) |
+| **debugging** | Systematic debugging: browser/server errors, performance issues, production incidents. Orchestrates Chrome DevTools, Grafana, Loki, Root Cause, Slack, Jira MCPs | [SKILL.md](.cursor/skills/debugging/SKILL.md) |
+| **js-testing** | Unit/integration tests: Jest, Vitest, RTL, Ambassador, WDS testkits. Adapts to existing patterns or introduces BDD architecture | [SKILL.md](.cursor/skills/js-testing/SKILL.md) |
+| **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
+| **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
+
+## MCP Servers
+
+Configured in `.cursor/mcp.json`. MCP provides tools; skills provide knowledge of how to use them.
+
+| Server | Purpose |
+|--------|---------|
+| **octocode** | Code search, LSP navigation, git history, GitHub integration |
+| **chrome-devtools** | Browser DevTools: DOM inspection, network, console, performance |
+| **MCP-S** | Wix toolkit: Grafana, Loki, Jira, Slack, DevEx, DB, Figma, Root Cause |
+| **wix-design-system-mcp** | WDS component documentation and examples |
+| **wix-internal-docs** | Wix internal documentation access |
+| **review-gate-v2** | Code review automation and quality gates |
+| **pdf-reader** | PDF document processing and extraction |
+| **browsermcp** | Browser automation (Playwright-based) |
+
+## Key Documentation
+
+- [Coding Agents Handbook](.cursor/docs/HANDBOOK.md) — Planning, skills vs MCP, context management, model selection
+- [Workflow Examples](.cursor/docs/WORKFLOWS.md) — End-to-end workflow examples
+- [Verification Strategies](.cursor/docs/VERIFICATION.md) — Validation patterns
