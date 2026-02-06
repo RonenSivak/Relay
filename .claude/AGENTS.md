@@ -22,6 +22,22 @@ ALL workflows follow this pattern:
 - **VERIFY**: Validate results. See [docs/VERIFICATION.md](docs/VERIFICATION.md) for validation strategies. If uncertain about validation logic, consult user before proceeding
 - **Publish**: Generate report.md + present to user + (if code changes needed) create plan.md → ask approval → implement
 
+### Critical Rule: Brainstorming First
+
+**EVEN IF the user directly invokes a skill (e.g., `/deep-search`, `/wds-docs`), you MUST run `/brainstorming` FIRST.**
+
+When user says `/deep-search how is X defined?`:
+1. **DO NOT** immediately execute deep-search
+2. **DO** invoke `/brainstorming` first to clarify scope, success criteria, and approach
+3. **THEN** proceed to Plan → Execute → Verify → Publish
+
+The only exception is `/brainstorming` itself - that can be invoked directly.
+
+This rule exists because:
+- Jumping straight to execution often leads to wasted effort
+- Clarification prevents searching in wrong places or for wrong things
+- The workflow pattern is mandatory, not optional
+
 ## Orchestration Principles
 
 You (the agent) orchestrate all workflows:
