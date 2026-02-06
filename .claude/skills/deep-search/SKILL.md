@@ -13,6 +13,30 @@ This skill leverages two MCP servers:
 - **octocode-mcp**: Code search, LSP navigation, git history, GitHub integration
 - **mcps-mcp**: Jira tickets and Slack discussions for organizational context
 
+## Prerequisites: Start with Brainstorming
+
+**MANDATORY**: Before executing deep-search, ALWAYS invoke `/brainstorming` first to:
+
+1. **Clarify the investigation goal** - What exactly are we looking for?
+2. **Identify search scope** - Which repos, timeframes, or areas to focus on?
+3. **Define success criteria** - What evidence would answer the question?
+4. **Choose investigation type** - Definition hunting, pattern discovery, cross-repo, or bug hunting?
+
+Example flow:
+```
+User: "How is authentication handled?"
+
+Step 1: /brainstorming
+- Clarify: Are we looking for implementation details, design decisions, or both?
+- Scope: Just this repo or also shared libraries?
+- Success: Need code locations + rationale for design choices
+
+Step 2: /deep-search
+- Execute investigation with clear parameters from brainstorming
+```
+
+This ensures focused investigation rather than unfocused searching.
+
 ## When to Use This Skill
 
 Invoke `/deep-search` when you need forensic-level investigation:
@@ -213,12 +237,27 @@ This skill uses progressive disclosure to manage context:
 
 ## Integration with Workflows
 
-Deep Search integrates with the standard workflow pattern:
+Deep Search follows the mandatory workflow pattern. **Never skip the Clarify step.**
 
-1. **Clarify**: Use `/brainstorming` to understand what evidence is needed
-2. **Plan**: Choose search strategy (DFS/BFS/A*) and investigation type
+1. **Clarify (MANDATORY)**: Invoke `/brainstorming` FIRST
+   - What are we investigating?
+   - What would "success" look like?
+   - What scope and constraints apply?
+
+2. **Plan**: Based on brainstorming output, choose:
+   - Search strategy (DFS/BFS/A*)
+   - Investigation type (definition/pattern/cross-repo/bug)
+   - Which MCP tools to use
+
 3. **Execute**: Run `/deep-search` with MCP tools
-4. **VERIFY**: Check evidence against standards in evidence-hierarchy.md
+   - Follow the Core Workflow steps
+   - Use progressive disclosure for reference docs
+
+4. **VERIFY**: Check evidence against standards
+   - All findings have file:line citations
+   - Primary evidence is verifiable
+   - No "probably" or "likely" statements
+
 5. **Publish**: Format findings using output-format.md template
 
 ## Examples
