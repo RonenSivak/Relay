@@ -1,77 +1,49 @@
-/m# Relay - Workflow Orchestration Repository
+# Relay - Workflow Orchestration Repository
 
 Skills-based workflow orchestration where individual skills combine to create complete flows.
 
-## Getting Started
+> For foundational concepts (planning, skills vs MCP, context management, model selection), see the [Coding Agents Handbook](.cursor/docs/HANDBOOK.md).
 
-New to AI coding agents? Read the [Coding Agents Handbook](docs/HANDBOOK.md) for foundational concepts including:
-- Planning before coding (most impactful change you can make)
-- Skills vs MCP vs Subagents
-- Context management and token efficiency
-- Model selection guidance
+## Workflow Pattern
 
-## Mandatory Workflow Pattern
+ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 
-ALL workflows follow this pattern:
-
-**Clarify → Plan → Execute → VERIFY → Publish**
-
-- **Clarify**: Use `/brainstorming` skill to understand user intent, explore approaches, and validate design before implementation
-- **Plan**: Create structured plan with specific steps. See [Plan mode guide](https://www.aihero.dev/plan-mode-introduction) for effective planning
-- **Execute**: Run the workflow using appropriate skills
-- **VERIFY**: Validate results. See [docs/VERIFICATION.md](docs/VERIFICATION.md) for validation strategies. If uncertain about validation logic, consult user before proceeding
-- **Publish**: Generate report.md + present to user + (if code changes needed) create plan.md → ask approval → implement
-
-### Critical Rule: Brainstorming First
-
-**EVEN IF the user directly invokes a skill (e.g., `/deep-search`, `/wds-docs`), you MUST run `/brainstorming` FIRST.**
-
-When user says `/deep-search how is X defined?`:
-1. **DO NOT** immediately execute deep-search
-2. **DO** invoke `/brainstorming` first to clarify scope, success criteria, and approach
-3. **THEN** proceed to Plan → Execute → Verify → Publish
-
-The only exception is `/brainstorming` itself - that can be invoked directly.
-
-This rule exists because:
-- Jumping straight to execution often leads to wasted effort
-- Clarification prevents searching in wrong places or for wrong things
-- The workflow pattern is mandatory, not optional
-
-## Orchestration Principles
-
-You (the agent) orchestrate all workflows:
-- Determine which skills to invoke and in what order
-- Skills can chain: output from one skill becomes input for another
-- Always verify "why we're doing what we're doing" before each major step
+| Step | What to do |
+|------|-----------|
+| **Clarify** | ALWAYS invoke `/brainstorming` first — even when the user directly invokes another skill |
+| **Plan** | Create structured plan with specific steps |
+| **Execute** | Run the workflow using appropriate skills |
+| **VERIFY** | Validate results per [VERIFICATION.md](.cursor/docs/VERIFICATION.md). If uncertain, consult user |
+| **Publish** | Present findings + (if code changes) create plan.md → ask approval → implement |
 
 ## Available Skills
 
-- **brainstorming**: ALWAYS use first for Clarify step. See [docs/skills/brainstorming.md](docs/skills/brainstorming.md)
-- **wds-docs**: Wix Design System component reference. See [docs/skills/wds-docs.md](docs/skills/wds-docs.md)
-- **deep-search**: Forensic code investigation with octocode-mcp and mcps-mcp. Use for definition hunting, pattern discovery, cross-repo analogy, and bug hunting. See [skills/deep-search/SKILL.md](skills/deep-search/SKILL.md)
-- **js-testing**: JavaScript/TypeScript testing with BDD architecture (driver/builder/spec). Adapts to existing patterns or introduces get/given/when structure. See [skills/js-testing/SKILL.md](skills/js-testing/SKILL.md)
+| Skill | When to use | Reference |
+|-------|------------|-----------|
+| **brainstorming** | ALWAYS first. Clarifies intent, explores approaches, validates design | [SKILL.md](.cursor/skills/brainstorming/SKILL.md) |
+| **deep-search** | Forensic code investigation: definition hunting, pattern discovery, cross-repo analogy, bug hunting | [SKILL.md](.cursor/skills/deep-search/SKILL.md) |
+| **debugging** | Systematic debugging: browser/server errors, performance issues, production incidents. Orchestrates Chrome DevTools, Grafana, Loki, Root Cause, Slack, Jira MCPs | [SKILL.md](.cursor/skills/debugging/SKILL.md) |
+| **js-testing** | Unit/integration tests: Jest, Vitest, RTL, Ambassador, WDS testkits. Adapts to existing patterns or introduces BDD architecture | [SKILL.md](.cursor/skills/js-testing/SKILL.md) |
+| **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
+| **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
 
-For skill authoring best practices, see [Anthropic's guide](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices).
+## MCP Servers
 
-## Available MCP Tools
+Configured in `.cursor/mcp.json`. MCP provides tools; skills provide knowledge of how to use them.
 
-MCP (Model Context Protocol) servers provide additional capabilities. Configured in `.mcp.json`:
-
-- **review-gate-v2**: Code review automation and quality gates
-- **wix-design-system-mcp**: WDS component documentation and examples
-- **wix-internal-docs**: Wix internal documentation access
-- **MCP-S**: Wix toolkit integration (lazy-dev)
-- **chrome-devtools**: Browser DevTools integration for debugging
-- **octocode**: Advanced code research and exploration
-- **pdf-reader**: PDF document processing and extraction
-- **browsermcp**: Browser automation capabilities
-
-See [docs/HANDBOOK.md](docs/HANDBOOK.md) for MCP vs Skills comparison.
+| Server | Purpose |
+|--------|---------|
+| **octocode** | Code search, LSP navigation, git history, GitHub integration |
+| **chrome-devtools** | Browser DevTools: DOM inspection, network, console, performance |
+| **MCP-S** | Wix toolkit: Grafana, Loki, Jira, Slack, DevEx, DB, Figma, Root Cause |
+| **wix-design-system-mcp** | WDS component documentation and examples |
+| **wix-internal-docs** | Wix internal documentation access |
+| **review-gate-v2** | Code review automation and quality gates |
+| **pdf-reader** | PDF document processing and extraction |
+| **browsermcp** | Browser automation (Playwright-based) |
 
 ## Key Documentation
 
-- [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - End-to-end workflow examples showing skills in action
-- [docs/VERIFICATION.md](docs/VERIFICATION.md) - Validation strategies and patterns
-- [docs/HANDBOOK.md](docs/HANDBOOK.md) - Complete coding agents handbook (Wix-specific guidance)
-- [docs/skills/](docs/skills/) - Individual skill documentation
+- [Coding Agents Handbook](.cursor/docs/HANDBOOK.md) — Planning, skills vs MCP, context management, model selection
+- [Workflow Examples](.cursor/docs/WORKFLOWS.md) — End-to-end workflow examples
+- [Verification Strategies](.cursor/docs/VERIFICATION.md) — Validation patterns
