@@ -26,6 +26,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **unit-testing** | Unit/integration tests: Jest, Vitest, RTL, Ambassador, WDS testkits. Adapts to existing patterns or introduces BDD architecture | [SKILL.md](.cursor/skills/unit-testing/SKILL.md) |
 | **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
 | **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
+| **figma-to-code** | Convert Figma designs to React code using WDS. Orchestrates Figma MCP, WDS MCP, Context7, wix-internal-docs | [SKILL.md](.cursor/skills/figma-to-code/SKILL.md) |
 
 ## MCP Servers
 
