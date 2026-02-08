@@ -27,6 +27,8 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **wds-docs** | Wix Design System component reference: props, examples, usage patterns | [SKILL.md](.cursor/skills/wds-docs/SKILL.md) |
 | **chrome-devtools** | Browser automation, debugging, and performance analysis via Chrome DevTools MCP | [SKILL.md](.cursor/skills/chrome-devtools/SKILL.md) |
 | **figma-to-code** | Convert Figma designs to React code using WDS. Orchestrates Figma MCP, WDS MCP, Context7, wix-internal-docs | [SKILL.md](.cursor/skills/figma-to-code/SKILL.md) |
+| **adopt-subagent-flow** | Transform any skill to use adaptive parallel subagent architecture with plan.md, def-done.md, and automatic fallback | [SKILL.md](.claude/skills/adopt-subagent-flow/SKILL.md) |
+| **convert-string-to-i18n** | Adaptive replacement of hard-coded UI text with Babel translation keys. Tries parallel subagents, falls back to single-agent if model can't support it. plan.md + def-done.md verification. Supports ICU, Trans, withTranslation, 5 Wix i18n frameworks | [SKILL.md](.claude/skills/convert-string-to-i18n/SKILL.md) |
 
 ## MCP Servers
 
