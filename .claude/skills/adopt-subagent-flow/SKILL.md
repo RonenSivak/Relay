@@ -10,7 +10,7 @@ Transform an existing skill into the adaptive parallel subagent architecture:
 ```mermaid
 flowchart TD
     Setup[Step 1: Setup] --> Plan[Step 2: Plan — plan.md + def-done.md]
-    Plan --> Strategy[Ask user: Parallelism Strategy]
+    Plan --> Strategy[Ask user: Strategy + Execution Mode]
     Strategy --> Classify{Tasks independent?}
     Classify -- Yes --> Parallel[Dispatch subagents in parallel]
     Classify -- No / dependent --> Sequential[Process sequentially]
@@ -62,6 +62,20 @@ Add these (new for most skills):
 Exact counts depend on actual tasks. Example with 12 tasks: fast ~6–8, moderate ~3–4, conservative ~2.
 Max concurrent subagents per batch is always 4 (platform limit). Fast with 8 runs 2 batches.
 
+- **Ask Execution Mode** (Claude Code only — Cursor always uses foreground) — offer this choice **only** when background execution won't break the flow:
+
+| Mode | Behavior | Viable when |
+|------|----------|-------------|
+| **Foreground** | Subagents block main conversation. Permission prompts and clarifying questions pass through. | Always. Default choice. |
+| **Background** | Subagents run concurrently. Permissions pre-approved upfront. MCP tools unavailable. Clarifying questions fail silently. | Tasks are self-contained, no MCP tools needed, no mid-task clarification expected. |
+
+**Viability check** — do NOT offer background if any of these are true:
+  - Subagents use MCP tools (Grafana, Jira, Slack, etc.)
+  - Processor prompt includes "Before You Begin" / clarification steps
+  - Tasks require interactive permission prompts mid-execution
+
+When background is chosen: dispatch all subagents in the batch, then wait for all to complete before proceeding to review.
+
 #### Step 3 — Execute (Adaptive)
 Replace the existing execution logic with:
 
@@ -85,12 +99,23 @@ Replace the existing execution logic with:
 - **Conservative**: Up to 3 concurrent per batch. Total subagents roughly a
   quarter of what fast would use. Aggressive grouping: many tasks per subagent.
 
+### Execution mode (Claude Code only)
+
+- **Foreground** (default): Dispatch subagents one batch at a time. Each batch
+  blocks until all subagents in it complete. Use when tasks need MCP tools,
+  permission prompts, or mid-task clarification.
+- **Background**: Dispatch all subagents in the batch to run concurrently.
+  Pre-approve all permissions upfront. Wait for all to finish before review.
+  Only viable when tasks are fully self-contained (no MCP, no clarification).
+
+In Cursor, all Task tool subagents are foreground (blocking but parallel).
+
 **Per batch:**
 
 1. Select pending independent tasks from plan.md (batch size per strategy above)
 2. Group tasks per subagent according to strategy granularity
-3. Dispatch task-processor subagents in parallel (one per group)
-4. Collect results
+3. Dispatch task-processor subagents (foreground or background per chosen mode)
+4. Wait for all subagents in batch to complete
 5. Dispatch reviewer subagents in parallel (one per completed group)
 6. Fix issues: processor fix → reviewer re-review → repeat until approved
 7. Update plan.md and TodoWrite
@@ -145,6 +170,8 @@ Task tool:
     - [ABSOLUTE_PATH]/references/[file].md
 
     ## Before You Begin
+    <!-- NOTE: Remove this section if using background execution mode.
+         Background subagents cannot ask clarifying questions. -->
 
     If anything is unclear about the requirements, approach, or
     dependencies — **ask now.** Don't guess or make assumptions.
@@ -156,6 +183,7 @@ Task tool:
 
     **While you work:** If you encounter something unexpected or unclear,
     pause and ask. It's always OK to clarify mid-task.
+    <!-- NOTE: Remove "pause and ask" guidance for background mode. -->
 
     ## Before Reporting: Self-Review
 
@@ -258,15 +286,21 @@ Add these sections to the transformed skill:
 **Parallel subagents by default.** Do NOT self-justify choosing direct mode.
 
 1. After Step 2 → ask user for parallelism strategy (fast / moderate / conservative)
-2. Identify task dependencies
-3. Independent tasks → dispatch subagents in parallel (batch size per strategy)
-4. Dependent tasks → process sequentially
-5. resource_exhausted at runtime → fall back to direct mode
+2. Check if background execution is viable → if yes, ask user for execution mode
+3. Identify task dependencies
+4. Independent tasks → dispatch subagents in parallel (batch size per strategy, mode per choice)
+5. Dependent tasks → process sequentially
+6. resource_exhausted at runtime → fall back to direct mode
 
 Strategy limits:
 - Fast: up to 8 total subagents (ceiling, not target), 4 concurrent, fine-grained tasks
 - Moderate: ~half of fast total, 4 concurrent, grouped tasks
 - Conservative: ~quarter of fast total, 3 concurrent, aggressively grouped tasks
+
+Execution mode (Claude Code only):
+- Foreground (default): blocks, supports MCP + clarification + permission prompts
+- Background: concurrent, requires pre-approved permissions, no MCP, no clarification
+- Only offer background when viable — otherwise use foreground without asking
 ```
 
 **Red Flags**:
@@ -286,6 +320,8 @@ Strategy limits:
 - Let processor self-review replace actual review (both are needed)
 - Default to 8 subagents just because "fast" was selected (8 is the ceiling — use only when justified by task count)
 - Skip asking the user for parallelism strategy (always ask before dispatch)
+- Offer background mode when subagents need MCP tools or mid-task clarification
+- Proceed to review before all background subagents have completed (always wait for all)
 ```
 
 **Error Handling**:
@@ -310,7 +346,9 @@ Before finalizing the transformed skill:
 - [ ] Step 1 (Setup) contains all one-time initialization
 - [ ] Step 2 generates plan.md + def-done.md
 - [ ] Step 2 includes parallelism strategy selection (fast / moderate / conservative)
+- [ ] Step 2 includes execution mode selection (foreground / background) with viability check
 - [ ] Step 3 defaults to parallel subagents with strategy-based batch sizing and clear fallback rules
+- [ ] Background mode only offered when no MCP tools, no clarification, no interactive permissions needed
 - [ ] Step 4 verifies against def-done.md
 - [ ] Processor prompt includes "Before You Begin" (questions) and "Self-Review" sections
 - [ ] Reviewer prompt includes "Do Not Trust the Report" with explicit DO/DO NOT lists
