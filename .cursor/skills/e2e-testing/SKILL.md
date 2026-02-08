@@ -5,227 +5,172 @@ description: End-to-end browser testing for Wix applications using Sled 3 (@wix/
 
 # E2E Testing
 
-## Prerequisites: Start with Brainstorming
+## Prerequisites
 
 **MANDATORY**: Before writing E2E tests, invoke `/brainstorming` to clarify:
 
 1. What user flows need E2E coverage?
-2. What environment will tests run against? (local dev, staging, production)
-3. Is there existing E2E infrastructure? (Sled 3, Sled 2, Playwright)
-4. Is Storybook available? (visual regression testing opportunity)
+2. What environment will tests run against?
+3. Is there existing E2E infrastructure?
+4. Is Storybook available for visual regression?
 
 ## Core Workflow
 
 ### Step 1: Infrastructure Detection (Always First)
 
-**CRITICAL:** Before writing any tests, analyze what already exists.
-
 ```bash
-# Find existing E2E test files
 Glob: **/*.e2e.*, **/*.spec.ts, **/*.sled.spec.*, **/*.sled3.spec.*
-
-# Check for framework configs
-Glob: playwright.config.*, sled/sled.json, sled/*.json
-
-# Check package.json for E2E deps
+Glob: playwright.config.*, sled/sled.json
 Read: package.json → look for @wix/sled-playwright, @wix/sled-test-runner, @playwright/test
-
-# Check for Storybook
-Glob: .storybook/**, storybook-static/**, *.stories.tsx
+Glob: .storybook/**, *.stories.tsx
 ```
 
 **Decision:**
-
 ```
 E2E infrastructure found?
-│
-├─ @wix/sled-playwright in deps → Sled 3 (Playwright-based)
-│  └─ Has storybook? → Add @wix/playwright-storybook-plugin
-│
-├─ @wix/sled-test-runner v2.x in deps → Sled 2 (Puppeteer/Jest)
-│
+├─ @wix/sled-playwright → Sled 3 (Playwright-based)
+│  └─ Has Storybook? → Add @wix/playwright-storybook-plugin
+├─ @wix/sled-test-runner v2.x → Sled 2 (Puppeteer/Jest)
 ├─ @playwright/test (no sled) → Standalone Playwright
-│
-└─ Nothing found → Ask: "Is this a Wix internal project?"
-   ├─ YES → Set up Sled 3 (recommended)
-   │  └─ Has Storybook? → Include storybook-plugin
-   └─ NO → Set up standalone Playwright
+└─ Nothing → Wix project? → Sled 3 (recommended) / Non-Wix → Playwright
 ```
 
-### Step 2: Framework Setup (If New)
+### Step 2: Yoshi Flow Detection
 
-**Sled 3** (Wix internal - recommended):
-- See `references/sled-testing.md` for complete setup, config, and Sled 2→3 migration
+| Yoshi Flow | E2E Framework | Config | Test Dir | Run Command |
+|------------|--------------|--------|----------|-------------|
+| **flow-bm** | Sled 3 | `playwright.config.ts` | `e2e/` | `sled-playwright test` |
+| **flow-editor** | Sled 2 | `sled/sled.json` | `sled/` | `sled-test-runner remote` |
+| **fullstack** | Jest + Puppeteer | `jest-yoshi.config.js` | `__tests__/*.e2e.ts` | `yoshi test --e2e` |
+| **flow-library** | No E2E (unit only) | N/A | N/A | N/A |
+| **Non-Yoshi** | Sled 3 | `playwright.config.ts` | `tests/e2e/` | `sled-playwright test` |
 
-**Standalone Playwright** (non-Wix):
-- See `references/playwright-testing.md` for setup and configuration
+**Detect:** `package.json` → `wix.framework.type` or `devDependencies` for `@wix/yoshi-flow-*`.
 
-**Storybook Visual Regression** (with Sled 3):
-- See `references/storybook-sled.md` for plugin setup and auto-generated tests
+**Framework setup (if new):**
+- Sled 3: See `references/sled-testing.md`
+- Standalone Playwright: See `references/playwright-testing.md`
+- Storybook visual regression: See `references/storybook-sled.md`
 
 ### Step 3: Pattern Detection
 
-**CRITICAL:** Before writing any tests, analyze existing patterns in the codebase. Only fall back to BDD architecture when no existing patterns exist.
-
+**Before writing any tests**, analyze existing patterns:
 ```bash
-# Find existing E2E test files
 Glob: **/*.e2e.*, **/*.spec.ts, **/__e2e__/**, **/e2e/**
-
-# If tests found, read 2-3 examples to understand patterns
-Read: [existing test files]
+# If tests found → read 2-3 examples and match their style
+# No tests → use BDD architecture (driver/builder/spec)
 ```
-
-**Decision:**
-- **Tests exist** → Follow their patterns (naming, structure, drivers)
-- **No tests** → Use BDD architecture (driver/builder/spec) — see below
 
 ### Step 4: Write Tests
 
-**If following existing patterns:** Match their style exactly.
+**Existing patterns found?** Match their style exactly.
 
-**If using BDD architecture:** Create structured files:
+**No tests? Use BDD architecture:**
 
 ```
 __e2e__/
-├── constants.ts              # Test constants (BASE_URL, testUser)
-├── feature.spec.ts           # BDD specs (compose drivers)
+├── constants.ts              # BASE_URL, testUser
+├── feature.spec.ts           # BDD specs
 ├── feature.builder.ts        # Mock data factories
 └── drivers/
-    ├── app.driver.ts         # Base driver: navigation + given.* (API setup)
-    ├── page-name.driver.ts   # Page driver: get.* / is.* / when.*
-    └── component.driver.ts   # Component driver: get.* / is.* / when.*
+    ├── app.driver.ts         # Navigation + given.* (API setup)
+    └── page-name.driver.ts   # get.* / is.* / when.*
 ```
 
-See `references/e2e-driver-pattern.md` for complete templates and real Wix examples.
+See `references/e2e-driver-pattern.md` for complete templates.
 
-**BDD quick example (Sled 3):**
+**Quick example (Sled 3):**
 
 ```typescript
-import { test, expect } from '@wix/sled-playwright';
-import { AppDriver } from './drivers/app.driver';
-import { ItemsPageDriver } from './drivers/items-page.driver';
-import { anItem } from './items.builder';
-
-test.describe('Items Page', () => {
-  const appDriver = new AppDriver();
-  const itemsPage = new ItemsPageDriver();
-
-  test.beforeEach(async ({ auth }) => {
-    await auth.loginAsUser('test-user@wix.com');
-    appDriver.reset();
-  });
-
-  test('should show empty state when no items', async ({ page, interceptionPipeline }) => {
-    await appDriver.given
-      .itemsLoaded([])
-      .setup(interceptionPipeline);
-
-    await appDriver.navigateToHome(page);
-
-    await expect
-      .poll(async () => itemsPage.is.emptyStateShown(page))
-      .toBe(true);
-  });
-
-  test('should display items after load', async ({ page, interceptionPipeline }) => {
-    await appDriver.given
-      .itemsLoaded([anItem({ id: 'item-1' })])
-      .setup(interceptionPipeline);
-
-    await appDriver.navigateToHome(page);
-
-    await expect(itemsPage.get.itemRow(page, 'item-1')).toBeVisible();
-  });
+test('should show empty state when no items', async ({ page, interceptionPipeline }) => {
+  await appDriver.given.itemsLoaded([]).setup(interceptionPipeline);
+  await appDriver.navigateToHome(page);
+  await expect.poll(async () => itemsPage.is.emptyStateShown(page)).toBe(true);
 });
 ```
 
 **Coverage priorities:**
-1. **Critical user flows** — Revenue-generating or user-blocking paths
-2. **Cross-service interactions** — Flows spanning multiple backends
-3. **Regression-prone areas** — Flows that have broken before
-4. **Visual regression** — Component appearance via Storybook plugin
-5. **Skip**: Pure UI state (unit tests), API contracts (integration tests)
+1. Critical user flows (revenue, user-blocking)
+2. Cross-service interactions
+3. Regression-prone areas
+4. Visual regression via Storybook plugin
+5. Skip: pure UI state (unit tests), API contracts (integration tests)
 
 ### Step 5: Run Tests
 
+**`defineSledConfig()` crashes locally** — no CI env vars. Prefix with `CI=false`.
+
 ```bash
-# Sled 3
-sled-playwright test                           # All tests
-sled-playwright test --remote                  # Remote execution (CI-like)
-sled-playwright test feature.spec.ts           # Specific file
-sled-playwright detect-flakiness               # Check for flaky tests
+# Sled 3 — local
+CI=false npx sled-playwright test 2>&1 | tail -30
+CI=false npx sled-playwright test <file>.spec.ts 2>&1
+CI=false npx sled-playwright test --grep "<pattern>" 2>&1
+CI=false npx sled-playwright test --update-snapshots 2>&1
+
+# Sled 3 — CI
+sled-playwright test
+sled-playwright test --remote
+
+# View results
+npx sled-playwright show-report
 
 # Sled 2
-npx sled-test-runner                           # All tests (cloud)
-npx sled-test-runner --testPathPattern="feat"  # Specific pattern
+npx sled-test-runner
+npx sled-test-runner --testPathPattern="feat"
 ```
+
+**Working directory:** Run from the package directory containing `playwright.config.ts`.
 
 ### Step 6: Debug Failures
 
+**Read terminal output first:**
+```
+Test failed
+├─ Exact line + assertion → Fix assertion or code
+├─ "Couldn't find story matching..." → Rebuild Storybook; IDs use export names
+├─ Route aborted / unmocked API → Add mock for that endpoint
+├─ "intercepted pointer events" → Overlay blocking → wait/dismiss
+├─ Timeout → Check mocks return data, check page/story loads
+└─ Need deeper investigation → trace viewer or headed mode
+```
+
+**Debugging commands:**
 ```bash
-# Playwright / Sled 3: Headed mode (see the browser)
-sled-playwright test --headed
-
-# Step-through debugging
-sled-playwright test --debug
-
-# Standalone Playwright
-npx playwright test --headed
-npx playwright test --debug
-npx playwright test --ui            # Interactive test runner
+CI=false npx sled-playwright test failing.spec.ts 2>&1           # Full output
+npx playwright show-trace <test-results>/<test-name>/trace.zip   # Trace viewer
+CI=false npx sled-playwright test --headed                        # Watch browser
+CI=false npx sled-playwright test --debug                         # Playwright Inspector
+CI=false npx sled-playwright detect-flakiness --repeat-count 20   # Flaky detection
 ```
 
-**In-test debugging:**
-
-```typescript
-test('debug this flow', async ({ page }) => {
-  await page.pause();  // Opens Playwright Inspector — step through actions
-
-  // Use test.step for better trace/report structure
-  await test.step('Navigate to dashboard', async () => {
-    await page.goto('/dashboard');
-  });
-
-  await test.step('Create new item', async () => {
-    await page.getByRole('button', { name: 'Create' }).click();
-    await expect(page.getByText('Created')).toBeVisible();
-  });
-});
-```
-
-**Artifacts on failure** (configured via `playwright.config.ts`):
-- `trace: 'retain-on-failure'` — Full trace viewer (`npx playwright show-trace`)
-- `screenshot: 'only-on-failure'` — Failure screenshots
-- `video: 'retain-on-failure'` — Video recording
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| Element not found | Selector changed, timing | Playwright locators (auto-wait) |
+| Timeout | Slow/blocked API | Check mocks, increase timeout |
+| Visual regression | UI changed | `--update-snapshots` |
+| Story not found | Stale static build or wrong ID | Rebuild; verify export-name-based ID |
+| Route aborted | Unmocked request | Add mock |
+| CI env crash | `defineSledConfig` outside CI | `CI=false` prefix |
+| Pointer events intercepted | Overlay blocking | Dismiss overlay / wait |
+| Flaky | Race condition | `detect-flakiness`, add waits |
 
 ## Triggers & Workflows
 
 ### "Write E2E tests for X"
 
-1. Run infrastructure detection (Step 1)
-2. Run pattern detection (Step 3) — existing tests? Match their style
-3. No existing tests? → Use BDD architecture:
-   - Create `drivers/app.driver.ts` (navigation + API given.*)
-   - Create `drivers/x-page.driver.ts` (get.*/is.*/when.*)
-   - Create `x.builder.ts` (mock data factories)
+1. Infrastructure detection (Step 1)
+2. Pattern detection (Step 3) — match existing style
+3. No tests? → BDD: `app.driver.ts`, `page.driver.ts`, `feature.builder.ts`
 4. Write specs: happy path, error states, edge cases
-5. Run and verify all tests pass
-6. If Storybook exists: add visual regression tests
+5. Run and verify; add visual regression if Storybook exists
 
 ### "Debug failing E2E test"
 
-1. **Read the error completely** — screenshot, error message, stack trace
-2. **Categorize:**
-
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| Element not found | Selector changed, timing | Use Playwright locators (auto-wait) |
-| Timeout | Page didn't load, slow API | Check backend, increase timeout |
-| Visual regression | UI changed intentionally | Update snapshots: `--update-snapshots` |
-| Flaky (random pass/fail) | Race condition, shared state | Run `detect-flakiness`, add waits |
-| Works locally, fails remote | Environment difference | Run with `--remote` to reproduce |
-
-3. **For flaky tests:** `npx @wix/sled-playwright detect-flakiness --repeat-count 20`
+1. Run: `CI=false npx sled-playwright test failing.spec.ts 2>&1`
+2. Read error completely — line, assertion, stack
+3. Categorize using debug table above
+4. If unclear → trace viewer or headed mode
+5. If flaky → `detect-flakiness --repeat-count 20`
 
 ### "Set up E2E infrastructure"
 
@@ -235,9 +180,7 @@ test('debug this flow', async ({ page }) => {
 4. Check for Storybook → add visual regression plugin
 5. Add `postPublish` script for CI
 
-## Selector Strategy (from official Sled 3 docs)
-
-**Priority order:**
+## Selector Strategy
 
 | Priority | Selector | Example |
 |----------|----------|---------|
@@ -247,37 +190,13 @@ test('debug this flow', async ({ page }) => {
 | 4 | Test ID / data-hook | `page.getByTestId('submit-btn')` |
 | 5 | CSS (avoid) | `page.locator('.submit-btn')` |
 
-**Wix convention**: `data-hook` is the standard across WDS and Wix codebases. Configure:
-```typescript
-use: { testIdAttribute: 'data-hook' }
-```
+**Wix convention:** `data-hook` via `use: { testIdAttribute: 'data-hook' }`.
 
-## WDS Component Testing in E2E
+## What to Test (and What NOT)
 
-When the project uses `@wix/design-system`:
+**Test with E2E:** Critical user journeys, complex multi-step interactions, cross-service flows, auth flows, regression-prone areas.
 
-| Framework | Import Path |
-|-----------|-------------|
-| Puppeteer (Sled 2) | `@wix/design-system/dist/testkit/puppeteer` |
-| Playwright (Sled 3) | `@wix/design-system/dist/testkit/playwright` |
-
-See `references/wds-e2e-testing.md` for patterns and component APIs.
-
-## What to Test with E2E (and What NOT to)
-
-**Test with E2E:**
-- Critical user journeys (login, checkout, signup, onboarding)
-- Complex multi-step interactions (drag-and-drop, multi-step forms)
-- Cross-service flows (spanning multiple backends)
-- Authentication and authorization flows
-- Regression-prone areas that have broken before
-
-**Do NOT test with E2E:**
-- Unit-level logic (use unit tests — much faster)
-- API contracts (use integration tests)
-- Every edge case (too slow for E2E — cover in unit tests)
-- Internal implementation details
-- Pure UI state changes (unit tests with RTL)
+**Do NOT test with E2E:** Unit-level logic, API contracts, every edge case, implementation details, pure UI state.
 
 ```
     /  E2E  \        ← Few: critical user flows only
@@ -285,63 +204,56 @@ See `references/wds-e2e-testing.md` for patterns and component APIs.
   /   Unit    \      ← Many: business logic, components, utilities
 ```
 
-## Anti-Patterns
+## WDS Component Testing
 
-| Anti-Pattern | Better Approach |
-|-------------|----------------|
-| `page.waitForTimeout(3000)` | `await expect(locator).toBeVisible()` — auto-retrying assertion |
-| `page.waitForSelector('.btn')` | `page.getByRole('button', { name: 'Submit' })` — auto-waits |
-| `page.locator('.btn-primary.submit')` | `page.getByRole('button', { name: 'Submit' })` — role-based |
-| `page.locator('div > form > div:nth-child(2)')` | `page.getByLabel('Email')` — label-based |
-| Testing implementation details | Test user-visible behavior |
-| One giant test for entire flow | Break into focused, independent tests |
-| Shared mutable state between tests | Each test sets up its own state |
-| Hardcoded test data inline | Use builders (`anItem()`) and fixtures |
-| All logic in spec file | Use BDD drivers (get/is/when) |
-| Storing `page` in driver constructor | Pass `page` as parameter to each method |
-| Running visual tests locally | Always `--remote` for visual tests |
-| Retrying flaky tests without fixing | `detect-flakiness` → find root cause |
-| Skipping Storybook for visual coverage | Add `@wix/playwright-storybook-plugin` |
-| Manual snapshot tests for each story | Plugin auto-generates them |
+| Framework | Import Path |
+|-----------|-------------|
+| Puppeteer (Sled 2) | `@wix/design-system/dist/testkit/puppeteer` |
+| Playwright (Sled 3) | `@wix/design-system/dist/testkit/playwright` |
+
+See `references/wds-e2e-testing.md` for patterns.
 
 ## BDD Architecture Summary
 
-**Base Driver** (`drivers/app.driver.ts`):
-- `given.*` — API interception/data setup (return `this` for chaining)
-- `navigateTo*()` — Page navigation helpers
-- `setup()` / `reset()` — Interceptor lifecycle
+| Driver Type | Methods | Stateful? |
+|-------------|---------|-----------|
+| **Base** (`app.driver.ts`) | `given.*`, `navigateTo*()`, `setup()`, `reset()` | Yes (interceptors) |
+| **Page** (`page.driver.ts`) | `get.*`, `is.*`, `when.*` | No — pass `page` per method |
+| **Builder** (`feature.builder.ts`) | `anItem()`, `aUser()` — partial overrides | No — stable defaults |
+| **Spec** (`feature.spec.ts`) | Composes drivers, reads like docs | N/A |
 
-**Page Driver** (`drivers/page.driver.ts`):
-- `get.*` — Returns Playwright Locators
-- `is.*` — Async boolean state queries
-- `when.*` — Async browser actions
+Place builders in `src/test/builders/` — shared by unit + E2E.
 
-**Builder** (`feature.builder.ts`):
-- Factory functions with sensible defaults (`anItem()`, `aUser()`)
-- Allow partial overrides
+## Critical Pitfalls (Quick Reference)
 
-**Spec** (`feature.spec.ts`):
-- Composes base + page drivers
-- Reads like documentation
-- Uses `expect.poll()` for async state assertions
+1. **Storybook IDs** use **export names** (kebab-cased), NOT the `name` property — always verify
+2. **Playwright routes are LIFO** — register fail-safe catch-all FIRST, then specific mocks override it
+3. **Stale `storybook-static`** — rebuild (`yarn build:storybook`) after adding/renaming stories
+4. **Don't write visibility-only E2E tests** when visual regression exists — test behavior instead
+5. **Builders belong in `src/test/builders/`** — shared by unit + E2E, no global counters
 
-Example:
-```typescript
-test('should show empty state when no items', async ({ page, interceptionPipeline }) => {
-  await appDriver.given
-    .itemsLoaded([])
-    .setup(interceptionPipeline);
+For detailed explanations, see `references/lessons-pitfalls.md`.
 
-  await appDriver.navigateToHome(page);
+## Sled 3 Fixtures
 
-  await expect.poll(async () => itemsPage.is.emptyStateShown(page)).toBe(true);
-});
-```
+| Fixture | Purpose |
+|---------|---------|
+| `auth` | `auth.loginAsUser()`, `auth.loginAsMember()` |
+| `site` | `await site.create()` → `{ metaSiteId }` |
+| `experiment` | `experiment.enable('my-experiment')` |
+| `interceptionPipeline` | Network interception |
+| `urlBuilder` | Build URLs with overrides/experiments |
+| `biSpy` | Spy on BI events |
 
-## References
+**Scoped auth:** `test.use({ user: 'admin@wix.com' })` for auto-login.
 
-- `references/e2e-driver-pattern.md` — BDD driver/builder/spec templates for E2E tests
-- `references/sled-testing.md` — Sled 3 setup, config, CLI, fixtures, migration from Sled 2
-- `references/playwright-testing.md` — Standalone Playwright setup, network mocking, debugging
-- `references/storybook-sled.md` — Storybook visual regression with @wix/playwright-storybook-plugin
-- `references/wds-e2e-testing.md` — WDS browser testkits (Puppeteer + Playwright)
+## Additional Resources
+
+- `references/e2e-driver-pattern.md` — BDD driver/builder/spec templates
+- `references/sled-testing.md` — Sled 3 setup, config, CLI, fixtures, migration
+- `references/playwright-testing.md` — Standalone Playwright setup, mocking, debugging
+- `references/storybook-sled.md` — Visual regression with @wix/playwright-storybook-plugin
+- `references/wds-e2e-testing.md` — WDS browser testkits
+- `references/anti-patterns.md` — Common anti-patterns and better approaches
+- `references/lessons-pitfalls.md` — Lessons from real implementations
+- [Sled 3 official docs](https://dev.wix.com/docs/fed-guild/articles/infra/sled3-beta/getting-started/getting-started)
