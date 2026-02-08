@@ -10,8 +10,9 @@ Transform an existing skill into the adaptive parallel subagent architecture:
 ```mermaid
 flowchart TD
     Setup[Step 1: Setup] --> Plan[Step 2: Plan — plan.md + def-done.md]
-    Plan --> Classify{Tasks independent?}
-    Classify -- Yes --> Parallel[Dispatch subagents in parallel — up to 4]
+    Plan --> Strategy[Ask user: Parallelism Strategy]
+    Strategy --> Classify{Tasks independent?}
+    Classify -- Yes --> Parallel[Dispatch subagents in parallel]
     Classify -- No / dependent --> Sequential[Process sequentially]
     Parallel --> Review[Dispatch reviewers in parallel]
     Sequential --> Review
@@ -50,6 +51,16 @@ Add these (new for most skills):
 - **Generate `plan.md`** — table of tasks with status tracking
 - **Generate `def-done.md`** — checklist of success criteria (extracted from the skill's quality requirements)
 - **Create TodoWrite entries** — one per task
+- **Ask Parallelism Strategy** — before execution, ask the user:
+
+| Strategy | Max Subagents | Task Grouping | Trade-off |
+|----------|--------------|---------------|-----------|
+| **Fast** | Up to 8 (ceiling, not target — use only when justified) | Fine-grained: 1–2 tasks per subagent | More requests & tokens, faster completion |
+| **Moderate** | Roughly half of fast, scaled to task count | Group related tasks: 3–4 per subagent | Balanced speed vs cost |
+| **Conservative** | Roughly quarter of fast, scaled to task count | Aggressive grouping: many tasks per subagent | Fewest requests & tokens, slowest |
+
+Exact counts depend on actual tasks. Example with 12 tasks: fast ~6–8, moderate ~3–4, conservative ~2.
+Max concurrent subagents per batch is always 4 (platform limit). Fast with 8 runs 2 batches.
 
 #### Step 3 — Execute (Adaptive)
 Replace the existing execution logic with:
@@ -60,19 +71,29 @@ Replace the existing execution logic with:
 **Parallel subagents by default.** Do NOT self-justify choosing direct mode —
 "I prefer direct mode" or "more control" are never valid reasons.
 
-> Dispatch independent tasks as parallel subagents (up to 4 at once).
+> Dispatch independent tasks as parallel subagents based on the chosen strategy.
 > Only fall back to direct mode when:
 > (a) subagent fails with `resource_exhausted`, or
 > (b) tasks genuinely depend on each other's output.
 
+### Batch sizing by strategy
+
+- **Fast**: Up to 4 concurrent per batch. Total subagents up to 8 (only when
+  justified — 8 is the ceiling, not the target). Fine-grained: 1–2 tasks each.
+- **Moderate**: Up to 4 concurrent per batch. Total subagents roughly half of
+  what fast would use. Group related tasks: 3–4 per subagent.
+- **Conservative**: Up to 3 concurrent per batch. Total subagents roughly a
+  quarter of what fast would use. Aggressive grouping: many tasks per subagent.
+
 **Per batch:**
 
-1. Select up to 4 pending independent tasks from plan.md
-2. Dispatch task-processor subagents in parallel (one per task)
-3. Collect results
-4. Dispatch reviewer subagents in parallel (one per completed task)
-5. Fix issues: processor fix → reviewer re-review → repeat until approved
-6. Update plan.md and TodoWrite
+1. Select pending independent tasks from plan.md (batch size per strategy above)
+2. Group tasks per subagent according to strategy granularity
+3. Dispatch task-processor subagents in parallel (one per group)
+4. Collect results
+5. Dispatch reviewer subagents in parallel (one per completed group)
+6. Fix issues: processor fix → reviewer re-review → repeat until approved
+7. Update plan.md and TodoWrite
 
 ### Direct Mode (fallback)
 
@@ -236,10 +257,16 @@ Add these sections to the transformed skill:
 
 **Parallel subagents by default.** Do NOT self-justify choosing direct mode.
 
-1. After Step 2 → identify task dependencies
-2. Independent tasks → dispatch subagents in parallel (up to 4)
-3. Dependent tasks → process sequentially
-4. resource_exhausted at runtime → fall back to direct mode
+1. After Step 2 → ask user for parallelism strategy (fast / moderate / conservative)
+2. Identify task dependencies
+3. Independent tasks → dispatch subagents in parallel (batch size per strategy)
+4. Dependent tasks → process sequentially
+5. resource_exhausted at runtime → fall back to direct mode
+
+Strategy limits:
+- Fast: up to 8 total subagents (ceiling, not target), 4 concurrent, fine-grained tasks
+- Moderate: ~half of fast total, 4 concurrent, grouped tasks
+- Conservative: ~quarter of fast total, 3 concurrent, aggressively grouped tasks
 ```
 
 **Red Flags**:
@@ -257,6 +284,8 @@ Add these sections to the transformed skill:
 - Skip self-review in processor (both self-review and external review are needed)
 - Ignore subagent questions (answer before letting them proceed)
 - Let processor self-review replace actual review (both are needed)
+- Default to 8 subagents just because "fast" was selected (8 is the ceiling — use only when justified by task count)
+- Skip asking the user for parallelism strategy (always ask before dispatch)
 ```
 
 **Error Handling**:
@@ -280,7 +309,8 @@ Before finalizing the transformed skill:
 
 - [ ] Step 1 (Setup) contains all one-time initialization
 - [ ] Step 2 generates plan.md + def-done.md
-- [ ] Step 3 defaults to parallel subagents with clear fallback rules
+- [ ] Step 2 includes parallelism strategy selection (fast / moderate / conservative)
+- [ ] Step 3 defaults to parallel subagents with strategy-based batch sizing and clear fallback rules
 - [ ] Step 4 verifies against def-done.md
 - [ ] Processor prompt includes "Before You Begin" (questions) and "Self-Review" sections
 - [ ] Reviewer prompt includes "Do Not Trust the Report" with explicit DO/DO NOT lists
