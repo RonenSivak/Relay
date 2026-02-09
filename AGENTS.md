@@ -33,6 +33,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **rule-to-skill** | Convert Cursor rules (.mdc), commands, or instructions into structured Agent Skills with optional scripts and references | [SKILL.md](.cursor/skills/rule-to-skill/SKILL.md) |
 | **adopt-subagent-flow** | Transform any skill to use adaptive parallel subagent architecture with plan.md, def-done.md, and automatic fallback. Use when adding subagents to a skill or restructuring for parallel execution | [SKILL.md](.cursor/skills/adopt-subagent-flow/SKILL.md) |
 | **convert-string-to-i18n** | Adaptive replacement of hard-coded UI text with Babel translation keys. Tries parallel subagents, falls back to single-agent if model can't support it. plan.md + def-done.md verification. Supports ICU, Trans, withTranslation, 5 Wix i18n frameworks | [SKILL.md](.cursor/skills/convert-string-to-i18n/SKILL.md) |
+| **implement-bi** | End-to-end BI event implementation for yoshi-flow-bm React projects. 4-phase workflow: event extraction, schema analysis, hook/component integration, testing & validation. Orchestrates BI Catalog MCP and Eventor MCP | [SKILL.md](.claude/skills/implement-bi/SKILL.md) |
 | **implement-translations** *(legacy)* | 5-phase script-based workflow for the same task. Superseded by convert-string-to-i18n | [SKILL.md](.cursor/skills/implement-translations/SKILL.md) |
 
 ## MCP Servers
