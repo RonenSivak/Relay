@@ -31,9 +31,13 @@ Strategy limits:
 - `bi-catalog-mcp` — `bi-catalog-mcp:get_evid_schema` fetches event schemas
 - `eventor-mcp` — `eventor-mcp:listSessionFeatures` and `eventor-mcp:getImplementationFlow` extract events from sessions
 
-> If these aren't configured, add them to `.cursor/mcp.json`:
+> **Cursor** — add to `.cursor/mcp.json`:
 > ```json
 > { "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } }
+> ```
+> **Claude Code** — add to `.mcp.json`:
+> ```json
+> { "mcpServers": { "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } } }
 > ```
 
 **Official references:**
