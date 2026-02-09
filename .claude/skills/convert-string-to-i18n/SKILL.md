@@ -66,7 +66,27 @@ If missing, use values from user input. Fail if neither available.
 ### 1.2 Load & Index Translation Keys
 
 1. Locate `messages_en.json` from `langFilePath` directory
-2. If missing → **fail**: "Babel 3 not configured (messages_en.json missing); configure and re-run"
+2. If missing → **attempt generation before failing**:
+   a. Verify `babel_config.json` exists (from Step 1.1) — if not, fail: "No babel_config.json found"
+   b. **Ensure `@wix/babel-cli`** is in `devDependencies` — if missing, add it:
+      ```bash
+      # Use the project's package manager (detect from lockfile: yarn.lock → yarn, package-lock.json → npm)
+      yarn add -D @wix/babel-cli   # or: npm install -D @wix/babel-cli
+      ```
+   c. **Ensure `generate-translation-keys` script** exists in `package.json` `scripts` — if missing, add:
+      ```json
+      "generate-translation-keys": "babel-cli"
+      ```
+   d. **Ensure `.gitignore` covers generated locale files** — `langFilePath/*.json` files are build artifacts downloaded from S3 and must not be committed. If not already gitignored, add:
+      ```
+      # Generated Babel translation files
+      <langFilePath>/*.json
+      ```
+   e. **Run key generation**:
+      ```bash
+      yarn generate-translation-keys   # or: npm run generate-translation-keys
+      ```
+   f. Verify `messages_en.json` now exists under `langFilePath`. If **still** missing → fail: "babel-cli ran but messages_en.json not generated — check babel_config.json projectId/version and network access to S3"
 3. **Use `Bash` (not `Read`)** — `messages_en.json` is often too large for the Read tool's token limit. Extract keys with node:
    ```bash
    node -e "const k=require('<path>/messages_en.json'); for(const[n,v]of Object.entries(k)) console.log(n+' → '+(typeof v==='string'?v:JSON.stringify(v)))"
@@ -127,7 +147,13 @@ Use the script output as the candidate file list. Do NOT manually grep — the s
 
 ### 2.1 Apply Infrastructure Fixes
 
-If the discovery report flagged missing infra (e.g., `fe-essentials-standalone` missing `i18n.messages`), apply fixes now:
+#### Generate translation keys (if discovery reported `keysStatus: "missing"`)
+
+If `messages_en.json` is missing, follow Step 1.2 sub-steps (a–f) to install `@wix/babel-cli`, generate keys, and verify. Use the discovery report's `babelCliInstalled`, `generateScriptExists`, `langFilePathGitignored` flags to skip already-satisfied steps. After generation, re-run Step 1.2 to build the key index.
+
+#### Framework infrastructure fixes
+
+If the discovery report flagged missing framework infra (e.g., `fe-essentials-standalone` missing `i18n.messages`), apply fixes now:
 
 ```typescript
 import messages_en from '<relative-path>/messages_en.json';
@@ -141,24 +167,7 @@ Update `tsconfig.json` with `resolveJsonModule: true` if needed.
 
 ### 2.2 Generate plan.md (from discovery report)
 
-Write `plan.md` to the target project root:
-
-```markdown
-# i18n Conversion Plan
-
-## Project
-- Framework: {framework}
-- Babel project: {projectName} ({projectId})
-- Keys loaded: {count}
-- Infra: ready
-
-## Files
-
-| # | File | Est. Strings | Namespace | Status |
-|---|------|-------------|-----------|--------|
-| 1 | src/components/Foo/Foo.tsx | ~5 | verse.foo | pending |
-| 2 | ... | ... | ... | pending |
-```
+Write `plan.md` to the target project root with: project metadata (framework, babel project, key count, infra status) and a files table (`#`, `File`, `Est. Strings`, `Namespace`, `Status=pending`).
 
 ### 2.3 Generate def-done.md
 
@@ -210,11 +219,7 @@ Exact counts depend on actual file count. Max concurrent subagents per batch is 
 
 > Candidate files are almost always independent (different file, different strings, no shared state). Only fall back to direct mode when: (a) subagent fails with `resource_exhausted`, or (b) tasks genuinely depend on each other's output.
 
-### Batch sizing by strategy
-
-- **Fast**: Up to 4 concurrent per batch. Total subagents up to 8 (only when justified by file count). Fine-grained: 1–2 files each.
-- **Moderate**: Up to 4 concurrent per batch. Total subagents roughly half of what fast would use. Group related files: 3–4 per subagent.
-- **Conservative**: Up to 3 concurrent per batch. Total subagents roughly a quarter of what fast would use. Aggressive grouping.
+Use the batch sizing from the chosen strategy (see Execution Strategy / Step 2.5).
 
 **Per batch:**
 
@@ -380,24 +385,9 @@ When dispatching subagents, follow these rules:
 
 ### Claude Code (native agents)
 
-Claude Code delegates to `.claude/agents/i18n-*` agents automatically based on task descriptions. Each agent runs in its own context window with tool restrictions, model selection, and preloaded skills.
+Uses `.claude/agents/i18n-*` agents: `i18n-file-processor` (bypassPermissions, inherit model), `i18n-reviewer` (haiku, read-only), `i18n-verifier` (inherit, read-only).
 
-| Agent | File | Model | Mode | Purpose |
-|-------|------|-------|------|---------|
-| `i18n-file-processor` | `.claude/agents/i18n-file-processor.md` | inherit | bypassPermissions | Process one file |
-| `i18n-reviewer` | `.claude/agents/i18n-reviewer.md` | haiku | plan (read-only) | Review replacements |
-| `i18n-verifier` | `.claude/agents/i18n-verifier.md` | inherit | plan (read-only) | Final def-done check |
-
-#### Background execution for parallelism
-
-Dispatch file-processors in the background for concurrent processing. **CRITICAL**: File-processors use `bypassPermissions` because background subagents auto-deny any permission not pre-approved. With `acceptEdits`, background agents silently fail to write files — they complete their analysis but no changes are saved to disk.
-
-**Orchestrator instructions for Claude Code:**
-1. Dispatch up to 4 `i18n-file-processor` agents per batch
-2. Explicitly request background execution: "run these in the background"
-3. Wait for all background agents to complete before dispatching the next batch
-4. After each batch, verify files were actually modified (`git status` or check file contents) before marking as completed in plan.md
-5. If an agent reports completion but the file is unchanged, re-dispatch in foreground
+**CRITICAL**: File-processors must use `bypassPermissions` — background agents auto-deny permissions, so `acceptEdits` causes silent write failures. Dispatch up to 4 per batch in background. After each batch, verify files were modified (`git status`) before marking completed. Re-dispatch in foreground if unchanged.
 
 ### Cursor (Task tool templates)
 
@@ -472,28 +462,19 @@ Skip files/strings that are **already using translations**:
 
 ## Red Flags
 
-**Never:**
-- Replace a string with `undefined`, `null`, `''`, or remove it — every replacement must be `t('key')` or `<Trans>`. No match = leave original string untouched.
-- Invent keys that don't exist in the babel key index
-- Skip reviews (reviewer AND verifier are both required)
-- Skip re-review after fixes (reviewer found issues = fix = review again)
-- Start verification before all files are processed
-- Accept "close enough" (issues found = not done)
-- Leave files as `pending` in plan.md without processing or skipping them
-- Choose direct mode for preference ("more control" is not valid)
-- Make subagent read full `messages_en.json` (provide key subset instead)
-- Paste reference file content into subagent prompts (provide paths)
-- Skip self-review in processor (both self-review and external review are needed)
-- Ignore subagent questions (answer before letting them proceed)
-- Let processor self-review replace actual review (both are needed)
-- Default to 8 subagents just because "fast" was selected (8 is the ceiling, not target)
-- Skip asking the user for parallelism strategy (always ask before dispatch)
-- Stop between files, batches, or steps to ask "should I continue?" or present intermediate results — the entire workflow is one-shot, the user sees results only at the end
+**Replacements**: Never replace a string with `undefined`/`null`/`''` — every replacement must be `t()` or `<Trans>`. No match = leave original. Never invent keys.
+
+**Reviews**: Never skip reviewer or verifier. Never skip re-review after fixes. Processor self-review does not replace external review.
+
+**Workflow**: Never choose direct mode for preference. Never stop between steps/files/batches to ask "should I continue?" — one-shot execution. Never skip asking parallelism strategy. Never start verification before all files are done.
+
+**Subagents**: Never paste full `messages_en.json` or reference file content — provide key subsets and file paths. 8 subagents is the ceiling, not the target.
 
 ## Error Handling
 
 - **File read failure**: Skip file, mark as skipped in plan.md, continue
-- **Key loading failure**: Fail entire workflow (no keys = no matching)
+- **Key loading failure (messages_en.json missing)**: Attempt generation via `@wix/babel-cli` (see Step 1.2 / Step 2.1). If generation also fails → fail entire workflow
+- **babel-cli generation failure**: Check `babel_config.json` has valid `projectId`/`version`, network access to S3 is available. Report the error with actionable details
 - **Single replacement failure**: Skip that string, continue within the file
 - **Subagent resource_exhausted**: Switch to direct mode (see Step 3.0)
 - **Lint failure**: Attempt fix; if unfixable, report but don't roll back

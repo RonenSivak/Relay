@@ -37,7 +37,13 @@ Task tool (generalPurpose):
     ```
     Build key index from the output: { keyName → englishValue }.
     Flag ICU keys (containing {param} placeholders) with parameter names and count.
-    If missing → report the error.
+
+    If messages_en.json is missing → **do NOT fail**. Instead report in the discovery output:
+    - `keysStatus: "missing"`
+    - `babelCliInstalled: true/false` (check devDependencies for `@wix/babel-cli`)
+    - `generateScriptExists: true/false` (check scripts for `generate-translation-keys`)
+    - `langFilePathGitignored: true/false` (check .gitignore for langFilePath/*.json)
+    The orchestrator will install babel-cli, run key generation, and re-attempt loading.
 
     ### 3. Build Namespace Map
     - Group keys by first 2 namespace segments
