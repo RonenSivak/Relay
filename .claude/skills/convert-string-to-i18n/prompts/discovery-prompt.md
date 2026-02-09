@@ -31,7 +31,11 @@ Task tool (generalPurpose):
     If not found, report what's missing.
 
     ### 2. Load & Index Translation Keys
-    Read `messages_en.json` from langFilePath directory. Build key index: { keyName → englishValue }.
+    **Use Bash (not Read)** — messages_en.json is often too large for the Read tool's token limit.
+    ```bash
+    node -e "const k=require('<path>/messages_en.json'); for(const[n,v]of Object.entries(k)) console.log(n+' → '+(typeof v==='string'?v:JSON.stringify(v)))"
+    ```
+    Build key index from the output: { keyName → englishValue }.
     Flag ICU keys (containing {param} placeholders) with parameter names and count.
     If missing → report the error.
 

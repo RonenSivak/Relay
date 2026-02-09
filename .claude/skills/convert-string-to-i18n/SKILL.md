@@ -65,9 +65,12 @@ If missing, use values from user input. Fail if neither available.
 
 ### 1.2 Load & Index Translation Keys
 
-1. Read `messages_en.json` from `langFilePath` directory
-2. If missing/invalid → **fail**: "Babel 3 not configured (messages_en.json missing); configure and re-run"
-3. Build key index: `{ keyName → englishValue }` for all keys
+1. Locate `messages_en.json` from `langFilePath` directory
+2. If missing → **fail**: "Babel 3 not configured (messages_en.json missing); configure and re-run"
+3. **Use `Bash` (not `Read`)** — `messages_en.json` is often too large for the Read tool's token limit. Extract keys with node:
+   ```bash
+   node -e "const k=require('<path>/messages_en.json'); for(const[n,v]of Object.entries(k)) console.log(n+' → '+(typeof v==='string'?v:JSON.stringify(v)))"
+   ```
 4. Annotate ICU keys with parameter metadata — see [references/icu-guide.md](references/icu-guide.md)
 
 ### 1.3 Build Namespace Map

@@ -22,9 +22,14 @@ If not found, report what's missing so the orchestrator can ask the user.
 
 ### 2. Load & Index Translation Keys
 
-1. Read `messages_en.json` from `langFilePath` directory
+**Use `Bash` (not `Read`)** — `messages_en.json` is often too large for the Read tool's token limit.
+
+1. Extract keys with node:
+   ```bash
+   node -e "const k=require('<path>/messages_en.json'); for(const[n,v]of Object.entries(k)) console.log(n+' → '+(typeof v==='string'?v:JSON.stringify(v)))"
+   ```
 2. If missing/invalid → report the error (don't fail silently)
-3. Build key index: `{ keyName → englishValue }` for all keys
+3. Build key index: `{ keyName → englishValue }` from the output
 4. Flag ICU keys (containing `{param}` placeholders) with parameter names and count
 
 ### 3. Build Namespace Map
