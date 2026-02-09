@@ -31,11 +31,13 @@ Strategy limits:
 - `bi-catalog-mcp` — `bi-catalog-mcp:get_evid_schema` fetches event schemas
 - `eventor-mcp` — `eventor-mcp:listSessionFeatures` and `eventor-mcp:getImplementationFlow` extract events from sessions
 
-> **Cursor** — add to `.cursor/mcp.json`:
+> **IMPORTANT**: Config must be at the **workspace root** (the directory you opened in Cursor/Claude Code). A config nested inside a subdirectory (e.g., `packages/app/.cursor/mcp.json`) is NOT picked up by Cursor.
+>
+> **Cursor** — add to `<workspace-root>/.cursor/mcp.json`:
 > ```json
 > { "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } }
 > ```
-> **Claude Code** — add to `.mcp.json`:
+> **Claude Code** — add to `<workspace-root>/.mcp.json`:
 > ```json
 > { "mcpServers": { "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } } }
 > ```
@@ -71,6 +73,33 @@ type EventorOutput = {
 
 ---
 
+## Step 0 — MCP Gate (MANDATORY, DO NOT SKIP)
+
+**Before anything else**, validate that `bi-catalog-mcp` is available. This is the ONLY way to fetch event schemas. There is NO manual alternative, NO workaround, NO fallback. Do NOT proceed without it.
+
+Call `bi-catalog-mcp:get_evid_schema` with a known event (src: 61, evid: 1).
+
+**If the call succeeds** → continue to Step 1. Do NOT ask any other questions yet.
+
+**If the call fails** (tool not found, server error, not configured):
+
+1. **STOP immediately.** Do NOT continue to Step 1. Do NOT ask about parallelism. Do NOT start setup. Do NOT attempt any workaround or placeholder implementation.
+2. Use the `AskQuestion` tool to present a clickable choice:
+   - Title: "bi-catalog-mcp is not configured"
+   - Prompt: "The bi-catalog-mcp server is required to fetch BI event schemas. There is no alternative. How would you like to proceed?"
+   - Option A: "Add it for me — add the MCP config to my project and continue"
+   - Option B: "I'll do it myself — show me the setup steps"
+3. **If A**: Add the `bi-catalog-mcp` entry to the MCP config at the **workspace root** (the directory Cursor/Claude Code was opened from). Cursor only reads `.cursor/mcp.json` from the workspace root and `~/.cursor/mcp.json` globally — a config nested inside a subdirectory (e.g., `packages/app/.cursor/mcp.json`) is **NOT picked up**.
+   - Detect the workspace root (the top-level directory of the current session)
+   - Cursor: add to `<workspace-root>/.cursor/mcp.json` (create if missing) → `{ "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } }`
+   - Claude Code: add to `<workspace-root>/.mcp.json` (create if missing) → `{ "mcpServers": { "bi-catalog-mcp": { "url": "https://bo.wix.com/_serverless/bi-catalog-mcp/mcp/" } } }`
+   - Re-validate the MCP call. Only continue to Step 1 if it succeeds.
+4. **If B**: Show the config snippets above, emphasizing the file must be at the **workspace root** (not a nested package). **STOP. Wait for user to confirm** before continuing to Step 1.
+
+**Do NOT** improvise, guess schemas, use manual approaches, skip this gate, or bundle this question with any other question.
+
+---
+
 ## Step 1 — Setup
 
 All one-time initialization. Runs once before any tasks are dispatched.
@@ -84,10 +113,9 @@ All one-time initialization. Runs once before any tasks are dispatched.
 
 ### 1.2 Environment Check
 
-1. **Validate BI Catalog MCP (REQUIRED)** — call `bi-catalog-mcp:get_evid_schema` with a known event (src: 61, evid: 1). **If this fails, STOP the entire workflow** and tell the user to configure the MCP server (see Prerequisites). Do not attempt to proceed without it.
-2. **Detect existing BI packages** — `grep -r "@wix/bi-logger-" package.json packages/*/package.json`
-3. **Detect testing framework** — Jest, Vitest, RTL
-4. **Detect existing BI wrappers** — search for `use*Bi*` hooks, shared logger patterns
+1. **Detect existing BI packages** — `grep -r "@wix/bi-logger-" package.json packages/*/package.json`
+2. **Detect testing framework** — Jest, Vitest, RTL
+3. **Detect existing BI wrappers** — search for `use*Bi*` hooks, shared logger patterns
 
 ### 1.3 Fetch Event Schemas
 
@@ -175,7 +203,12 @@ One entry per task from plan.md.
 
 ### 2.5 Ask Parallelism Strategy
 
-Ask the user: **Fast / Moderate / Conservative?**
+Use the `AskQuestion` tool to present a clickable choice (do NOT bundle with any other question):
+- Title: "Parallelism Strategy"
+- Prompt: "How should events be processed?"
+- Option A: "Fast — up to 8 subagents, 1-2 events each, fastest completion"
+- Option B: "Moderate — ~half as many subagents, 3-4 events each, balanced"
+- Option C: "Conservative — fewest subagents, many events each, lowest cost"
 
 ---
 
@@ -259,6 +292,31 @@ After cleanup, present this summary (the only output the user sees):
 **Validation**: tests pass | lint clean | types clean
 **Next steps**: [any manual TODOs, or "None"]
 ```
+
+---
+
+## Subagent Dispatch
+
+When dispatching subagents, follow these rules:
+
+- **Never paste full schema or reference file content** — provide event details, file paths, and key data inline
+- **Parallel limit**: max 4 subagents at once
+- **Provide full task text** — do NOT tell subagents to read plan.md
+- **Check results** — after each batch, verify files were modified before marking completed
+- **Subagents cannot spawn subagents** — the orchestrator (this skill, running in the main conversation) dispatches all subagents
+
+### Claude Code (native agents)
+
+Uses `.claude/agents/bi-*` agents: `bi-event-processor` (bypassPermissions, inherit model), `bi-event-reviewer` (haiku, read-only), `bi-verifier` (sonnet, read-only).
+
+**CRITICAL**: Event-processors must use `bypassPermissions` — background agents auto-deny permissions, so `acceptEdits` causes silent write failures. Dispatch up to 4 per batch in background. After each batch, verify files were modified (`git status`) before marking completed. Re-dispatch in foreground if unchanged.
+
+### Cursor (Task tool)
+
+Uses `Task` tool with prompt templates from `prompts/`:
+- **event-processor-prompt.md** → `subagent_type: "generalPurpose"` (needs write access)
+- **event-reviewer-prompt.md** → `subagent_type: "generalPurpose"`, `readonly: true`
+- **def-done-verifier-prompt.md** → `subagent_type: "generalPurpose"`, `readonly: true`
 
 ---
 
