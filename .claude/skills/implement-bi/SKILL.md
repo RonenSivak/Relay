@@ -1,6 +1,6 @@
 ---
 name: implement-bi
-description: Implements Wix BI tracking events end-to-end in yoshi-flow-bm React projects using bi-schema-loggers. Four-phase workflow covering event extraction, schema analysis, hook and component integration, and testing with validation. Orchestrates bi-catalog-mcp and eventor-mcp servers. Use when the user says "implement BI events", "add BI tracking", "BI migration", "wire BI", "bi-schema-loggers", or provides an events array or Eventor sessionId.
+description: Implements Wix BI tracking events end-to-end in yoshi-flow-bm React projects using bi-schema-loggers. Adaptive execution — tries subagents in parallel (one per event group), falls back to direct mode on resource_exhausted. Four-step workflow with plan.md tracking and def-done.md verification. Orchestrates bi-catalog-mcp and eventor-mcp servers. Use when the user says "implement BI events", "add BI tracking", "BI migration", "wire BI", "bi-schema-loggers", or provides an events array or Eventor sessionId.
 compatibility: Requires bi-catalog-mcp and eventor-mcp MCP servers. Designed for yoshi-flow-bm React projects with @wix/bi-logger-* packages.
 ---
 
@@ -8,9 +8,26 @@ compatibility: Requires bi-catalog-mcp and eventor-mcp MCP servers. Designed for
 
 End-to-end BI event implementation for Wix React projects using bi-schema-loggers.
 
+## Execution Strategy
+
+**Parallel subagents by default.** Do NOT self-justify choosing direct mode — "I prefer direct mode" or "more control" are never valid reasons.
+
+1. After Step 2 → ask user for parallelism strategy (fast / moderate / conservative)
+2. Identify task dependencies (events targeting same component/hook → same group)
+3. Independent groups → dispatch subagents in parallel (batch size per strategy)
+4. Dependent groups → process sequentially
+5. resource_exhausted at runtime → fall back to direct mode
+
+Strategy limits:
+
+- **Fast**: up to 8 total subagents (ceiling, not target), 4 concurrent, fine-grained: 1–2 events each
+- **Moderate**: ~half of fast total, 4 concurrent, grouped: 3–4 events per subagent
+- **Conservative**: ~quarter of fast total, 3 concurrent, aggressively grouped: many events per subagent
+
 ## Prerequisites
 
 **MCP servers required:**
+
 - `bi-catalog-mcp` — `bi-catalog-mcp:get_evid_schema` fetches event schemas
 - `eventor-mcp` — `eventor-mcp:listSessionFeatures` and `eventor-mcp:getImplementationFlow` extract events from sessions
 
@@ -50,83 +67,39 @@ type EventorOutput = {
 
 ---
 
-## Execution Flow
+## Step 1 — Setup
 
-Execute phases sequentially. Each must succeed before the next.
+All one-time initialization. Runs once before any tasks are dispatched.
 
-Copy this checklist and track progress:
-
-```
-Phase Progress:
-- [ ] Phase 0: Event extraction (if sessionId provided)
-- [ ] Phase 1: Analysis & setup (schemas, loggers, component mapping)
-- [ ] Phase 2: Implementation & wiring (hooks, components, field propagation)
-- [ ] Phase 3: Testing & validation (tests, per-interaction validation, QA)
-- [ ] Cleanup: Remove intermediate files (unless --debug)
-```
-
-### Phase 0: Event Extraction (only if sessionId provided)
+### 1.1 Event Extraction (only if sessionId provided)
 
 1. Call `eventor-mcp:listSessionFeatures` with the `sessionId`
-2. For each feature's BI events, call `eventor-mcp:getImplementationFlow` with `session_id`, `feature_id`, `user_interaction`
+2. For each feature's BI events, call `eventor-mcp:getImplementationFlow`
 3. Aggregate results into `events` array following the `EventorOutput` type
 4. If extraction fails → ask user for events manually
 
-### Phase 1: Analysis & Setup
+### 1.2 Environment Check
 
-**Goal**: Fetch schemas, detect/install loggers, map events to components, plan field mappings.
-
-#### 1.0 Environment Check
-
-1. **Validate BI Catalog MCP** — test with `bi-catalog-mcp:get_evid_schema` using a known event (src: 61, evid: 1)
+1. **Validate BI Catalog MCP** — test with `bi-catalog-mcp:get_evid_schema` (src: 61, evid: 1)
 2. **Detect existing BI packages** — `grep -r "@wix/bi-logger-" package.json packages/*/package.json`
 3. **Detect testing framework** — Jest, Vitest, RTL
 4. **Detect existing BI wrappers** — search for `use*Bi*` hooks, shared logger patterns
 
-#### 1.1 Fetch Event Schemas
+### 1.3 Fetch Event Schemas
 
 For each event, call `bi-catalog-mcp:get_evid_schema({ src, evid })` — use parallel fetching. Extract:
+
 - `functionName` — the event builder function
 - `schemaLoggers` — available logger packages
 - `fields` — field definitions (name, type, required, description)
 
 Use `schemaLoggers[0]` as preferred logger unless project already uses a different one.
 
-#### 1.2 Install Logger Package
+### 1.4 Install Logger Package
 
-If not already installed: `yarn add @wix/[logger-name]`
+If not already installed: `yarn add @wix/[logger-name]`. Verify function exists in package types. See [logger-setup.md](references/logger-setup.md).
 
-Verify function exists in package types. See [logger-setup.md](references/logger-setup.md) for details.
-
-#### 1.3 Component Mapping
-
-For each event, find the target component:
-1. Use `interaction` + `description` for semantic search in `src/`
-2. Identify trigger points (onClick, onSubmit, etc.) matching the `interaction`
-3. If not found → flag for manual wiring with diagnostic info
-
-#### 1.4 Field Mapping
-
-Separate fields into:
-- **Static** — constants from `staticProperties` (name → value)
-- **Dynamic** — inferred from component props/state/context using `dynamicProperties` descriptions
-- **Missing** — flag required fields that need manual implementation
-
-#### 1.5 Save Analysis
-
-Write `wixify-analysis.json` with all schema results, component mappings, field plans, and environment info.
-
-**Phase 1 success**: All schemas fetched, loggers identified, components mapped, fields planned.
-
----
-
-### Phase 2: Implementation & Wiring
-
-**Goal**: Create/extend BI hooks, integrate into components, propagate fields.
-
-See [implementation-patterns.md](references/implementation-patterns.md) for full pattern details.
-
-#### 2.1 Choose Wiring Strategy
+### 1.5 Determine Wiring Strategy
 
 **Priority order (CRITICAL):**
 
@@ -136,81 +109,116 @@ See [implementation-patterns.md](references/implementation-patterns.md) for full
 | 2nd | **Component wrapper** using shared hook | Shared infrastructure exists |
 | 3rd | **Standalone hook** (last resort) | No shared infrastructure |
 
-#### 2.2 Generate/Extend BI Hooks
+### 1.6 Component Mapping
 
-- Import from `/v2` path (tree-shakable): `import { fnName } from '@wix/bi-logger-xxx/v2'`
-- Import types from `/v2/types`: `import type { fnNameParams } from '@wix/bi-logger-xxx/v2/types'`
-- Create `report[EventName]` method wrapping `biLogger.report(fnName(params))`
+For each event, find the target component:
 
-#### 2.3 Component Integration
+1. Use `interaction` + `description` for semantic search in `src/`
+2. Identify trigger points (onClick, onSubmit, etc.) matching the `interaction`
+3. If not found → flag for manual wiring with diagnostic info
 
-1. Add hook import to component
-2. Initialize hook: `const { reportEventName } = useHook()`
-3. Wire BI call at the correct trigger point — ensure it fires on the **actual described flow** (after creation, edit, deletion, etc.)
+### 1.7 Field Mapping
 
-#### 2.4 Field Propagation
+Separate fields into:
 
-**CRITICAL**: Trace component tree to ensure ALL BI fields reach the reporting point.
-1. Add missing fields to component props interfaces
-2. Update parent components to pass BI fields down
-3. Map static properties to constants, dynamic to component data sources
-
-#### 2.5 Validate Build
-
-```bash
-yarn lint ${modifiedFiles} && yarn tsc --noEmit
-```
-
-**Phase 2 success**: All hooks created, components integrated, fields propagated, build passes.
-
-Output: `wixify-implementation.json`
+- **Static** — constants from `staticProperties` (name → value)
+- **Dynamic** — inferred from component props/state/context using `dynamicProperties`
+- **Missing** — flag required fields that need manual implementation
 
 ---
 
-### Phase 3: Testing & Validation
+## Step 2 — Plan
 
-**Goal**: Generate tests, validate per-interaction, run QA.
+### 2.1 Group Events by Target
 
-See [testing-guide.md](references/testing-guide.md) for full testing patterns.
+Group events that share the **same component** or **same shared hook** into a single task. Events targeting different components are independent tasks.
 
-#### 3.1 Setup
+### 2.2 Generate plan.md
 
-Load Phase 2 results. Determine testkit import: `import biTestKit from '@wix/bi-logger-xxx/testkit/client'`
+```markdown
+# BI Implementation Plan
 
-#### 3.2 Locate Existing Tests
-
-**CRITICAL**: Always enhance existing test files. Never create isolated BI test files.
-
-```bash
-find . -name "*.spec.ts*" -o -name "*.test.ts*" | grep -E "(ComponentName)"
+| # | Task | Events (evid/src) | Component | Status |
+|---|------|--------------------|-----------|--------|
+| 1 | Wire [interaction] into [Component] | evid:X src:Y | path/to/Component.tsx | pending |
+| 2 | Wire [interaction] into [Component] | evid:X src:Y | path/to/Component.tsx | pending |
 ```
 
-#### 3.3 Add BI Test Assertions
+### 2.3 Generate def-done.md
 
-For each event, add test case:
+```markdown
+# Definition of Done
 
-```typescript
-beforeEach(() => { biTestKit.reset(); });
-
-it('should report [eventDescription] when [trigger]', async () => {
-  // Render component, simulate interaction
-  // Assert: biTestKit.eventName.last() contains expected fields
-});
+- [ ] Every event has a `report[EventName]` function in a BI hook file
+- [ ] All imports use `/v2` paths (tree-shakable)
+- [ ] All type imports use `/v2/types` paths
+- [ ] Every event's BI call is wired into the correct component at the correct trigger point
+- [ ] BI calls fire on actual described flow (after success, not before action)
+- [ ] All required BI fields are propagated through component tree
+- [ ] Static properties mapped to constants
+- [ ] Dynamic properties sourced from component props/state/context
+- [ ] Existing test files enhanced with BI assertions (no new isolated test files)
+- [ ] Testkit reset in beforeEach
+- [ ] All tests pass (`yarn test`)
+- [ ] Lint clean (`yarn lint`)
+- [ ] TypeScript clean (`yarn tsc --noEmit`)
+- [ ] No broken imports or missing dependencies
 ```
 
-**Testkit API**: `.last()`, `.getAll()`, `.length`, `.reset()`
+### 2.4 Create TodoWrite Entries
 
-#### 3.4 Per-Interaction Validation
+One entry per task from plan.md.
 
-For EACH interaction, verify:
+### 2.5 Ask Parallelism Strategy
+
+Ask the user: **Fast / Moderate / Conservative?**
+
+---
+
+## Step 3 — Execute (Adaptive)
+
+**Parallel subagents by default.** Only fall back to direct mode when: (a) subagent fails with `resource_exhausted`, or (b) tasks genuinely depend on each other's output.
+
+### Per batch
+
+1. Select pending independent tasks from plan.md (batch size per strategy)
+2. Group tasks per subagent according to strategy granularity
+3. Dispatch event-processor subagents — see [prompts/event-processor-prompt.md](prompts/event-processor-prompt.md)
+4. Wait for all subagents in batch to complete
+5. Dispatch event-reviewer subagents in parallel — see [prompts/event-reviewer-prompt.md](prompts/event-reviewer-prompt.md)
+6. Fix issues: processor fix → reviewer re-review → repeat until approved
+7. Update plan.md and TodoWrite
+
+### What each processor does (per event)
+
+1. Create/extend BI hook with `report[EventName]` method
+2. Wire hook into target component at correct trigger point
+3. Propagate missing BI fields through component tree
+4. Add BI test assertions to existing test file
+5. Self-review before reporting
+
+See [implementation-patterns.md](references/implementation-patterns.md) for import rules, wiring patterns, and field propagation. See [testing-guide.md](references/testing-guide.md) for testkit API and assertion patterns.
+
+### Direct Mode (fallback)
+
+Only use when: (a) subagent failed with `resource_exhausted`, or (b) tasks are genuinely dependent. Process remaining tasks sequentially with same logic and quality checks.
+
+---
+
+## Step 4 — Verify
+
+Dispatch the def-done verifier — see [prompts/def-done-verifier-prompt.md](prompts/def-done-verifier-prompt.md).
+
+### 4.1 Per-Interaction Validation
+
+For EACH event, verify:
+
 1. Function exists in BI hook file
-2. BI call exists in component
+2. BI call exists in component at correct trigger
 3. Test exists and covers the interaction
 4. Test passes when run
 
-Generate validation report with status per interaction.
-
-#### 3.5 Full QA
+### 4.2 Full QA
 
 ```bash
 yarn test --testNamePattern="BI" --verbose
@@ -218,60 +226,53 @@ yarn lint ${allModifiedFiles}
 yarn tsc --noEmit
 ```
 
-**Phase 3 success**: All tests pass, lint clean, types clean, every interaction validated.
+### 4.3 def-done.md Check
 
----
+Verify every criterion. Fix gaps → re-verify → loop until PASS.
 
-## Completion
-
-### Cleanup
+### 4.4 Cleanup & Summary
 
 - **Default**: Delete `wixify-analysis.json` and `wixify-implementation.json`
 - **`--debug`**: Keep intermediate files
 - **On error**: Always keep intermediate files
 
-### Summary Template
-
-```
-### BI Implementation Complete
-
-**Events Implemented:**
-
-1. **[Interaction]** (EVID: X, SRC: Y)
-   - Implementation: `path/to/component.tsx:line`
-   - Hook: `path/to/hook.ts:line`
-   - Tests: `path/to/test.spec.tsx:line`
-   - Status: Implemented & Tested
-
-**Summary:**
-- Total events: X | Implemented: X | Tested: X
-- Files modified: X | Test files updated: X
-- Logger: @wix/bi-logger-xxx
-- Shared hooks extended: [list]
-
-**Validation:**
-- All tests passing | Lint clean | Types clean
-- Per-interaction: X/X validated
-```
+Final summary with per-interaction status, files modified, validation results, and any remaining TODOs.
 
 ---
+
+## Red Flags
+
+**Never:**
+
+- Skip reviews (reviewer AND verifier are both required)
+- Skip re-review after fixes (issues found = fix = review again)
+- Start verification before all tasks are processed
+- Accept "close enough" (issues found = not done)
+- Leave tasks as `pending` without processing or skipping
+- Choose direct mode for preference ("more control" is not valid)
+- Make subagent read plan file (provide full task text instead)
+- Skip self-review in processor (both self-review and external review are needed)
+- Default to 8 subagents just because "fast" was selected (8 is the ceiling)
+- Skip asking the user for parallelism strategy (always ask before dispatch)
+
+## Error Handling
+
+- **Task failure**: Skip task, mark as skipped in plan.md, continue
+- **Subagent resource_exhausted**: Switch to direct mode for remaining tasks
+- **Verification failure**: Fix gaps, re-verify (loop until PASS)
+- **Missing packages**: Attempt one auto-install and retry
+- **MCP failure**: Reference [troubleshooting.md](references/troubleshooting.md) for resolution
 
 ## Progress Emoji
 
 | Phase | Emoji | Example |
 |-------|-------|---------|
-| Analysis | `🔍` | "Fetched schemas – resolved 3 logger functions" |
+| Analysis | `🔍` | "Fetched schemas — resolved 3 logger functions" |
+| Plan | `📋` | "Generated plan with 5 events in 3 groups" |
 | Implementation | `⚙️` | "Created hook and wired into component" |
+| Review | `🔎` | "Reviewer approved 2/3, 1 needs fixes" |
 | Testing | `🧪` | "Generated tests, all green" |
 | Success | `✅` | "BI implementation complete" |
 | Cleanup | `🧹` | "Intermediate files cleaned" |
 | Debug | `🐛` | "Keeping intermediate files" |
-| Error | `⚠️` | "Phase X failed – [details]" |
-
-## Error Handling
-
-1. Log error with phase context
-2. Reference [troubleshooting.md](references/troubleshooting.md) for resolution
-3. Create TODO items for manual resolution
-4. **Auto-recovery**: For missing packages, attempt one auto-install and retry
-5. Intermediate files kept on error for debugging
+| Error | `⚠️` | "Phase X failed — [details]" |
