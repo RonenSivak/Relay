@@ -236,11 +236,29 @@ Verify every criterion. Fix gaps → re-verify → loop until PASS.
 
 ### 4.4 Cleanup & Summary
 
-- **Default**: Delete `wixify-analysis.json` and `wixify-implementation.json`
-- **`--debug`**: Keep intermediate files
-- **On error**: Always keep intermediate files
+Delete all intermediate files created during execution:
 
-Final summary with per-interaction status, files modified, validation results, and any remaining TODOs.
+- `plan.md`, `def-done.md`, `wixify-analysis.json`, `wixify-implementation.json`
+- **`--debug`**: Keep all intermediate files
+- **On error**: Keep all intermediate files
+
+After cleanup, present this summary (the only output the user sees):
+
+```markdown
+## BI Implementation Summary
+
+**Events**: [N] implemented, [N] skipped
+**Logger**: @wix/bi-logger-[name]
+
+| Event | EVID | SRC | Component | Status |
+|-------|------|-----|-----------|--------|
+| [interaction] | [evid] | [src] | `path/to/file.tsx` | done |
+| [interaction] | [evid] | [src] | — | skipped: [reason] |
+
+**Files modified**: [list of changed files]
+**Validation**: tests pass | lint clean | types clean
+**Next steps**: [any manual TODOs, or "None"]
+```
 
 ---
 

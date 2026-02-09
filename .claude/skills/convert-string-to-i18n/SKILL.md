@@ -360,15 +360,31 @@ If ANY key returns count 0 → **revert that replacement** (restore the original
 
 If any criterion fails: fix the gap, re-check. Repeat until all pass.
 
-### 4d. Final Summary
+### 4d. Cleanup & Summary
 
 Once all criteria pass:
 
-1. Update def-done.md: check all boxes
-2. Summary report: files processed, strings replaced/skipped, skip reasons breakdown
-3. Show notable skipped strings grouped by reason for user review
+1. Delete intermediate files: `plan.md`, `def-done.md`
+   - **`--debug`**: Keep both files
+   - **On error**: Keep both files
+2. Present this summary (the only output the user sees):
 
-**Output** (this is the ONLY point where you present results to the user): `Step 4 — lint: ok | def-done: PASS | done`
+```markdown
+## i18n Conversion Summary
+
+**Framework**: [detected framework]
+**Babel project**: [projectName] ([projectId])
+
+| # | File | Replaced | Skipped | Status |
+|---|------|----------|---------|--------|
+| 1 | `path/to/file.tsx` | 8 | 1 | done |
+| 2 | `path/to/file.tsx` | 0 | 0 | skipped: already translated |
+
+**Totals**: [N] strings replaced, [N] skipped across [N] files
+**Skip reasons**: [N] no_matching_key, [N] ambiguous, [N] uncertain
+**Validation**: lint clean | types clean | all keys verified
+**Next steps**: [any notable skipped strings to review, or "None"]
+```
 
 ---
 
