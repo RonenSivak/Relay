@@ -2,7 +2,7 @@
 name: i18n-verifier
 description: Final verification gate for i18n conversion. Checks every def-done.md criterion against the actual codebase.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 permissionMode: plan
 maxTurns: 20
 ---
@@ -63,7 +63,19 @@ Go through every item in the Definition of Done. For each one, check the actual 
   - Each skipped string must have a reason
 - If any skipped string lacks a reason -> FAIL
 
-### 9. plan.md fully updated
+### 9. No destructive replacements
+- Scan all modified files for props/variables that previously held a string and now hold `undefined`, `null`, or `''`
+- Every replacement site must contain a `t()` or `<Trans>` call — if a value was removed instead of translated, it's a critical failure
+- If any destructive replacement found -> FAIL
+
+### 10. Test files updated
+- For each modified source file, check if a test file exists (`.spec.*`, `.test.*`)
+- In each test file: hardcoded strings that were replaced in the source should now use key names
+- `useTranslation` should be mocked using the project's test runner (vi.mock/jest.mock/etc.)
+- If no test file exists: acceptable, but should be noted
+- If test file exists but wasn't updated -> FAIL
+
+### 11. plan.md fully updated
 - No files left as `pending`
 - All files marked `completed` or `skipped`
 - If any pending -> FAIL
@@ -83,7 +95,9 @@ Go through every item in the Definition of Done. For each one, check the actual 
 | 6 | Lint passes | PASS/FAIL | [details] |
 | 7 | No TypeScript errors | PASS/FAIL | [details] |
 | 8 | Skipped strings documented | PASS/FAIL | [details] |
-| 9 | plan.md fully updated | PASS/FAIL | [details] |
+| 9 | No destructive replacements | PASS/FAIL | [details] |
+| 10 | Test files updated | PASS/FAIL | [details] |
+| 11 | plan.md fully updated | PASS/FAIL | [details] |
 
 ## Final Verdict: **PASS** / **FAIL**
 

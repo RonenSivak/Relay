@@ -77,16 +77,29 @@ Task tool (general-purpose):
     - If yes → flag as missed (processor should have caught it)
     - If no matching key → acceptable skip (note it)
 
-    ### 6. No Collateral Damage
+    ### 6. No Destructive Replacements
+    Scan for strings that were replaced with `undefined`, `null`, `''`, or removed entirely:
+    - Every `t()` call site should have previously been a hardcoded string
+    - If a prop/variable that previously held a string now holds `undefined` or `null`, flag it — the processor likely failed to match a key and destructively removed the value instead of leaving it
+    - This is a **critical** issue (category: `destructive_replacement`)
+
+    ### 7. No Collateral Damage
     - JSX structure is intact (no broken tags, missing braces)
     - No TypeScript syntax errors visible
     - Code style is preserved (indentation, quotes)
+
+    ### 7. Test File Updated
+    If a test file exists for this source file (`.spec.*` / `.test.*`):
+    - Are hardcoded strings that were replaced in the source also replaced in the test?
+    - Do RTL queries (`getByText`, `findByText`, `queryByText`) now use the key name?
+    - Is `useTranslation` properly mocked (using the project's test runner — `vi.mock`/`jest.mock`/etc., returning `t: key => key`)?
+    - If no test file exists: was this noted in the processor's report?
 
     ## Report Format
 
     - APPROVED: All checks pass, replacements are correct
     - ISSUES FOUND: List each issue with:
-      - Category (key_incorrect / param_mismatch / invented_key / missing_import / missed_string / broken_jsx)
+      - Category (key_incorrect / param_mismatch / invented_key / missing_import / missed_string / broken_jsx / destructive_replacement)
       - File location (line number or code snippet)
       - What's wrong
       - Suggested fix

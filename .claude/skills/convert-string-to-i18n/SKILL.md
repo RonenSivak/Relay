@@ -9,14 +9,20 @@ Replace hard-coded UI text with existing Babel translation keys. Produces plan.m
 
 ## Execution Strategy
 
-**Parallel subagents by default.** Always dispatch independent tasks in parallel (up to 4 at once). Do NOT self-justify choosing direct mode — "I prefer direct mode" or "more control" are never valid reasons.
+**Run to completion.** Do not stop to ask "should I continue?" between files, batches, or steps. The entire workflow (discover → plan → execute → verify) must run autonomously in a single pass. Only pause for user input when explicitly required (parallelism strategy question in Step 2) or when a genuine ambiguity blocks progress.
 
-```
-1. After Step 2 → identify task dependencies
-2. Independent tasks → dispatch subagents in parallel
-3. Dependent tasks (one task's output feeds another) → process sequentially
-4. resource_exhausted at runtime → fall back to direct mode for remaining tasks
-```
+**Parallel subagents by default.** Do NOT self-justify choosing direct mode — "I prefer direct mode" or "more control" are never valid reasons.
+
+1. After Step 2 → ask user for parallelism strategy (fast / moderate / conservative)
+2. Identify task dependencies
+3. Independent tasks → dispatch subagents in parallel (batch size per strategy)
+4. Dependent tasks → process sequentially
+5. resource_exhausted at runtime → fall back to direct mode
+
+Strategy limits:
+- **Fast**: up to 8 total subagents (ceiling, not target), 4 concurrent, fine-grained: 1–2 files each
+- **Moderate**: ~half of fast total, 4 concurrent, grouped: 3–4 files per subagent
+- **Conservative**: ~quarter of fast total, 3 concurrent, aggressively grouped: many files per subagent
 
 ## Principles
 
@@ -40,9 +46,15 @@ If `--debug` is in the user prompt, show detailed per-string matching decisions.
 
 ---
 
-## Step 1 — Setup
+## Steps 1-2: Discovery (delegated)
 
-**Goal**: Load translation keys, build namespace map, detect framework, ensure i18n infrastructure.
+**Goal**: Load translation keys, detect framework, find candidate files, generate plan.
+
+Steps 1 and 2 are **read-only discovery** — no files are modified. Delegate this work to the discovery agent to keep scanning output out of the main conversation context.
+
+**Subagent mode**: Dispatch `i18n-discovery` using [prompts/discovery-prompt.md](prompts/discovery-prompt.md) with project root path and optional scope.
+
+**Direct mode** (fallback): If subagent is unavailable, perform discovery yourself following the sub-steps below.
 
 ### 1.1 Load Babel Config
 
@@ -80,7 +92,37 @@ Check `package.json` dependencies (priority order):
 
 - **yoshi-flow-bm**: `.application.json` must have `translations.enabled: true`
 - **fe-essentials**: `.application.json` must have `translations.enabled: true`, `translations.suspense: true`
-- **fe-essentials-standalone**: `createEssentials` call must include `i18n.messages` with `messages_en.json` import. If missing:
+- **fe-essentials-standalone**: `createEssentials` call must include `i18n.messages` with `messages_en.json` import. If missing, the orchestrator adds it after discovery completes (discovery is read-only).
+
+### 1.5 Find Candidate Files
+
+Run the scanner script to find files with hardcoded UI strings:
+
+```bash
+node [ABSOLUTE_PATH_TO_SKILL]/scripts/scan-ui-strings.cjs [SCOPE_OR_SRC_DIR]
+```
+
+The script ([scripts/scan-ui-strings.cjs](scripts/scan-ui-strings.cjs)):
+- Walks `.js`, `.jsx`, `.ts`, `.tsx` files (skips `node_modules`, `dist`, `build`, etc.)
+- **Excludes test files** (`*.spec.*`, `*.test.*`) — those are updated as a side-effect of source file processing
+- Detects JSX text, JSX attrs (`title`, `placeholder`, `label`, `alt`, `aria-label`), string literals
+- Filters out code-like strings (URLs, constants, dotted identifiers, expressions)
+- Outputs a markdown table sorted by estimated string count (most strings first)
+- Reports totals: estimated strings, user-facing strings, words, chars
+
+Use the script output as the candidate file list. Do NOT manually grep — the script is faster and more consistent.
+
+**Output**: `Discovery — keys: <count> | framework: <type> | candidates: <n> files`
+
+---
+
+## Step 2 — Plan (orchestrator builds from discovery results)
+
+**Goal**: Apply infrastructure fixes, generate plan.md + def-done.md, ask parallelism strategy.
+
+### 2.1 Apply Infrastructure Fixes
+
+If the discovery report flagged missing infra (e.g., `fe-essentials-standalone` missing `i18n.messages`), apply fixes now:
 
 ```typescript
 import messages_en from '<relative-path>/messages_en.json';
@@ -90,32 +132,9 @@ const essentials = createEssentials({
 });
 ```
 
-Add missing config automatically. Update `tsconfig.json` with `resolveJsonModule: true` if needed.
+Update `tsconfig.json` with `resolveJsonModule: true` if needed.
 
-**Output**: `Step 1 — keys: <count> | framework: <type> | infra: ready`
-
----
-
-## Step 2 — Plan
-
-**Goal**: Find all candidate files, generate plan.md and def-done.md, create TodoWrite.
-
-### 2.1 Find Candidate Files
-
-Search `.tsx`/`.ts` files in `src/` for potential UI strings:
-
-```bash
-rg -l --type-add 'tsx:*.tsx' --type tsx --type ts \
-  '(>[A-Z][\w\s]+<|placeholder="|label="|title="|subtitle="|content="|buttonText=")' src/
-```
-
-Also grep for string literals that look like UI text (capitalized multi-word strings, sentences).
-
-**Exclude**: `*.spec.*`, `*.test.*`, `.d.ts`, `node_modules`, generated code, `__mocks__`, `__generated__/`, `locale-keys/` (code-generated LocaleKeys wrappers — already i18n'd).
-
-If `scope` input is provided, limit to that path. Order files by number of potential strings (most first).
-
-### 2.2 Generate plan.md
+### 2.2 Generate plan.md (from discovery report)
 
 Write `plan.md` to the target project root:
 
@@ -153,6 +172,8 @@ All must be true for 100% success:
 - [ ] Lint passes on all modified files (zero new lint errors)
 - [ ] No TypeScript compilation errors introduced
 - [ ] Skipped strings documented with skip reason
+- [ ] No destructive replacements (no string replaced with undefined/null/empty — every replacement is t() or Trans)
+- [ ] Test files updated: hardcoded strings in RTL queries replaced with keys, useTranslation mocked
 - [ ] plan.md updated: all files marked completed or skipped
 ```
 
@@ -160,7 +181,19 @@ All must be true for 100% success:
 
 Create a TodoWrite entry for each candidate file from plan.md.
 
-**Output**: `Step 2 — candidates: <n> files | plan.md + def-done.md written`
+### 2.5 Ask Parallelism Strategy
+
+Before execution, ask the user:
+
+| Strategy | Max Subagents | Task Grouping | Trade-off |
+|----------|--------------|---------------|-----------|
+| **Fast** | Up to 8 (ceiling, not target) | 1–2 files per subagent | More requests & tokens, faster |
+| **Moderate** | ~half of fast | 3–4 files per subagent | Balanced speed vs cost |
+| **Conservative** | ~quarter of fast | Many files per subagent | Fewest requests, slowest |
+
+Exact counts depend on actual file count. Max concurrent subagents per batch is always 4 (platform limit). Fast with 8 runs 2 batches.
+
+**Output**: `Step 2 — candidates: <n> files | plan.md + def-done.md written | strategy: <choice>`
 
 ---
 
@@ -168,24 +201,31 @@ Create a TodoWrite entry for each candidate file from plan.md.
 
 **Goal**: Process each file — replace strings with translation keys.
 
-> **Use parallel subagents for independent tasks.** In this skill, candidate files are almost always independent (different file, different strings, no shared state). Dispatch them in parallel. Only process tasks sequentially when they genuinely depend on each other's output, or fall back to direct mode if subagents fail with `resource_exhausted`. Do NOT choose direct mode for "more control" or preference — that is not a valid reason.
+**Parallel subagents by default.** Do NOT self-justify choosing direct mode — "I prefer direct mode" or "more control" are never valid reasons.
+
+> Candidate files are almost always independent (different file, different strings, no shared state). Only fall back to direct mode when: (a) subagent fails with `resource_exhausted`, or (b) tasks genuinely depend on each other's output.
+
+### Batch sizing by strategy
+
+- **Fast**: Up to 4 concurrent per batch. Total subagents up to 8 (only when justified by file count). Fine-grained: 1–2 files each.
+- **Moderate**: Up to 4 concurrent per batch. Total subagents roughly half of what fast would use. Group related files: 3–4 per subagent.
+- **Conservative**: Up to 3 concurrent per batch. Total subagents roughly a quarter of what fast would use. Aggressive grouping.
 
 **Per batch:**
 
-1. **Select next batch** — take up to 4 pending files from plan.md
-2. **Dispatch file-processor subagents in parallel** (one per file) using [prompts/file-processor-prompt.md](prompts/file-processor-prompt.md):
+1. **Select pending files** from plan.md (batch size per strategy above)
+2. **Group files** per subagent according to strategy granularity
+3. **Dispatch file-processor subagents in parallel** (one per group) using [prompts/file-processor-prompt.md](prompts/file-processor-prompt.md):
    - Provide key subset filtered to relevant namespace (max ~30 keys per file)
    - Provide file paths to reference docs — do NOT paste their content
-3. **Collect results** — wait for all to complete
-4. **Dispatch translation-reviewer subagents in parallel** (one per completed file) using [prompts/translation-reviewer-prompt.md](prompts/translation-reviewer-prompt.md):
+4. **Collect results**
+5. **Dispatch translation-reviewer subagents in parallel** (one per completed group) using [prompts/translation-reviewer-prompt.md](prompts/translation-reviewer-prompt.md):
    - Provide key subset, file-processor report, modified file path
-5. **Collect reviews** — for files with issues:
-   - Dispatch file-processor fix → reviewer re-review (serially per file)
-   - Repeat until approved
-6. **Update plan.md** — mark all batch files as `completed` or `skipped`
-7. **Update TodoWrite** for the batch
+6. **Fix issues**: processor fix → reviewer re-review → repeat until approved
+7. **Update plan.md** — mark all batch files as `completed` or `skipped`
+8. **Update TodoWrite** for the batch
 
-Repeat batches until no pending files remain.
+Repeat batches until no pending files remain. **Do not pause between batches to ask for confirmation** — proceed automatically.
 
 ### 3B. Direct Mode (fallback)
 
@@ -223,7 +263,7 @@ Process remaining files one at a time yourself. Follow these context management 
 - **Semantic match**: Same meaning, different wording → accept if context aligns
 - **Namespace priority**: Prefer keys from the namespace matching this file's directory
 - **ICU compatibility**: For parameterized strings, check parameter count and positions — see [references/icu-guide.md](references/icu-guide.md)
-- **No match**: Skip with reason
+- **No match**: **Leave the original string untouched.** Skip with reason.
 
 | Skip Reason | When |
 |-------------|------|
@@ -234,14 +274,36 @@ Process remaining files one at a time yourself. Follow these context management 
 
 Never invent keys. Prefer exact > near-exact > semantic. When ambiguous, skip and note alternatives.
 
+**Skip means leave unchanged** — the original string must remain exactly as it was in the source. Never replace a skipped string with `undefined`, `null`, `''`, or remove it.
+
 ### Replacement Rules
 
+- **Every replacement must produce a `t()` or `<Trans>` call** — never replace a string with `undefined`, `null`, `''`, or any non-translation value. If no key matches, leave the original string untouched.
 - Add `useTranslation` import if not present (framework-specific, see below)
 - Add `const { t } = useTranslation()` in component body if not present
 - Replace string with `t('key')` or `t('key', { params })` for ICU
 - For keys with `<0>...</0>` markup, use `Trans` component
 - For class components, use `withTranslation` HOC
 - Context-specific rules: see [references/replacement-patterns.md](references/replacement-patterns.md)
+
+### Test File Updates
+
+After replacing strings in a source file, update the corresponding test file:
+
+1. **Find test file** — look for `*.spec.tsx`, `*.spec.ts`, `*.test.tsx`, `*.test.ts` with matching name in the same directory
+2. **For each replaced string** (`"Save Changes"` → `t('verse.foo.save')`):
+   - Search the test file for the same hardcoded string in RTL queries (`getByText`, `findByText`, `queryByText`, `getByRole`), assertions, and driver patterns
+   - Replace with the translation key: `'verse.foo.save'`
+3. **Add `useTranslation` mock** if the test file doesn't already mock it. Detect the project's test runner first:
+   - Check for `vitest` in devDependencies → use `vi.mock()`
+   - Check for `jest` in devDependencies → use `jest.mock()`
+   - Check existing test files for `vi.mock` vs `jest.mock` patterns to confirm
+   - Match the project's existing mock style (module factory, `__mocks__/` dir, `beforeEach` setup, etc.)
+   - The mock should make `t(key)` return the key itself
+
+4. **Skip if no test file exists** — don't create test files, just note it in the report
+
+The mock makes `t(key)` return the key itself, so `getByText('verse.foo.save')` works. Always match the project's existing test patterns — don't assume a specific test runner.
 
 **Output**: `Step 3 — mode: <subagent|direct> | files: <n> | replaced: <total> | skipped: <total>`
 
@@ -269,7 +331,9 @@ Run linter on all modified files. Fix new lint errors.
 6. **Lint passes** — confirmed in 4a
 7. **No TypeScript errors** — run `tsc --noEmit` if available
 8. **Skipped strings documented** — every skipped string has a reason
-9. **plan.md fully updated** — all files marked `completed` or `skipped`
+9. **No destructive replacements** — no prop/variable that previously held a string now holds `undefined`/`null`/`''`; every replacement site has a `t()` or `<Trans>` call
+10. **Test files updated** — for each modified source file with a test, hardcoded strings replaced with keys, `useTranslation` mocked
+11. **plan.md fully updated** — all files marked `completed` or `skipped`
 
 If any criterion fails: fix the gap, re-check. Repeat until all pass.
 
@@ -302,16 +366,26 @@ Claude Code delegates to `.claude/agents/i18n-*` agents automatically based on t
 
 | Agent | File | Model | Mode | Purpose |
 |-------|------|-------|------|---------|
-| `i18n-file-processor` | `.claude/agents/i18n-file-processor.md` | inherit | acceptEdits | Process one file |
+| `i18n-file-processor` | `.claude/agents/i18n-file-processor.md` | inherit | bypassPermissions | Process one file |
 | `i18n-reviewer` | `.claude/agents/i18n-reviewer.md` | haiku | plan (read-only) | Review replacements |
 | `i18n-verifier` | `.claude/agents/i18n-verifier.md` | inherit | plan (read-only) | Final def-done check |
 
-Background execution enables true parallelism — ask Claude to run file-processors in the background for concurrent processing.
+#### Background execution for parallelism
+
+Dispatch file-processors in the background for concurrent processing. **CRITICAL**: File-processors use `bypassPermissions` because background subagents auto-deny any permission not pre-approved. With `acceptEdits`, background agents silently fail to write files — they complete their analysis but no changes are saved to disk.
+
+**Orchestrator instructions for Claude Code:**
+1. Dispatch up to 4 `i18n-file-processor` agents per batch
+2. Explicitly request background execution: "run these in the background"
+3. Wait for all background agents to complete before dispatching the next batch
+4. After each batch, verify files were actually modified (`git status` or check file contents) before marking as completed in plan.md
+5. If an agent reports completion but the file is unchanged, re-dispatch in foreground
 
 ### Cursor (Task tool templates)
 
 Uses `prompts/` directory templates with the Task tool (up to 4 parallel):
 
+- [prompts/discovery-prompt.md](prompts/discovery-prompt.md) — Discover files & keys (read-only, fast model)
 - [prompts/file-processor-prompt.md](prompts/file-processor-prompt.md) — Process one file
 - [prompts/translation-reviewer-prompt.md](prompts/translation-reviewer-prompt.md) — Review replacements
 - [prompts/def-done-verifier-prompt.md](prompts/def-done-verifier-prompt.md) — Final verification
@@ -381,13 +455,22 @@ Skip files/strings that are **already using translations**:
 ## Red Flags
 
 **Never:**
+- Replace a string with `undefined`, `null`, `''`, or remove it — every replacement must be `t('key')` or `<Trans>`. No match = leave original string untouched.
 - Invent keys that don't exist in the babel key index
-- Skip the def-done verification step
+- Skip reviews (reviewer AND verifier are both required)
+- Skip re-review after fixes (reviewer found issues = fix = review again)
 - Start verification before all files are processed
 - Accept "close enough" (issues found = not done)
 - Leave files as `pending` in plan.md without processing or skipping them
+- Choose direct mode for preference ("more control" is not valid)
 - Make subagent read full `messages_en.json` (provide key subset instead)
 - Paste reference file content into subagent prompts (provide paths)
+- Skip self-review in processor (both self-review and external review are needed)
+- Ignore subagent questions (answer before letting them proceed)
+- Let processor self-review replace actual review (both are needed)
+- Default to 8 subagents just because "fast" was selected (8 is the ceiling, not target)
+- Skip asking the user for parallelism strategy (always ask before dispatch)
+- Stop between files/batches/steps to ask "should I continue?" — run to completion autonomously
 
 ## Error Handling
 

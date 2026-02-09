@@ -373,7 +373,7 @@ name: my-task-processor
 description: What this agent does and when Claude should delegate to it
 tools: Read, Write, Edit, Grep, Glob
 model: inherit
-permissionMode: acceptEdits
+permissionMode: bypassPermissions
 maxTurns: 25
 skills:
   - my-domain-skill
@@ -412,11 +412,13 @@ System prompt goes here. This is the only prompt the subagent receives
 ```yaml
 tools: Read, Write, Edit, Grep, Glob
 model: <haiku | sonnet | opus | inherit>  # based on task complexity
-permissionMode: acceptEdits
+permissionMode: bypassPermissions  # MUST be bypassPermissions for background execution
 maxTurns: 25
 skills:
   - <domain-skill>
 ```
+
+> **WARNING: Background subagent permissions.** Background subagents auto-deny any tool permission not pre-approved by the user. `acceptEdits` is NOT sufficient — background agents with `acceptEdits` silently fail to write files (they complete analysis but save nothing to disk). Use `bypassPermissions` for any subagent that writes files and runs in background. This is safe when the agent's `tools` list is restricted (no Bash, no MCP).
 
 **Reviewer** (read-only, fast, learns):
 ```yaml
@@ -438,7 +440,7 @@ maxTurns: 20
 ### Key Design Decisions
 
 - **`skills` field**: Preloads full skill content into the subagent's context. The subagent gets reference files, framework patterns, and matching rules without needing to discover them. Use this instead of "read on demand" instructions.
-- **`permissionMode: acceptEdits`**: For processors that need to modify files. Auto-accepts edits — no permission prompts.
+- **`permissionMode: bypassPermissions`**: For processors that need to modify files AND run in background. Background subagents auto-deny unprompted permissions — `acceptEdits` silently fails in background mode. Safe when `tools` list excludes Bash/MCP.
 - **`permissionMode: plan`**: For reviewers and verifiers. Enforces read-only at runtime — the subagent cannot modify files even if its system prompt is ambiguous.
 - **Model selection by complexity**: Processors scale with task difficulty — `haiku` for mechanical transforms, `sonnet` for multi-step logic, `opus`/`inherit` for complex reasoning. Reviewers use `haiku` (verification, not generation). Verifiers use `sonnet` (needs reasoning but not generation).
 - **`memory: project`**: For reviewers that benefit from learning across sessions (skip patterns, false positives, project conventions). Stored in `.claude/agent-memory/<name>/`.

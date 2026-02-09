@@ -56,10 +56,22 @@ Scan the file for remaining untranslated UI text:
 
 If you find missed strings with a matching key in the subset, flag as missed.
 
-### 6. No Collateral Damage
+### 6. No Destructive Replacements
+Scan for strings that were replaced with `undefined`, `null`, `''`, or removed entirely:
+- Every `t()` call site should have previously been a hardcoded string
+- If a prop/variable that previously held a string now holds `undefined` or `null`, the processor destructively removed a value instead of leaving it — flag as `destructive_replacement` (critical)
+
+### 7. No Collateral Damage
 - JSX structure is intact (no broken tags, missing braces)
 - No TypeScript syntax errors visible
 - Code style is preserved
+
+### 7. Test File Updated
+If a test file exists for this source file (`.spec.*` / `.test.*`):
+- Are hardcoded strings that were replaced in the source also replaced in the test?
+- Do RTL queries (`getByText`, `findByText`, `queryByText`) now use the key name?
+- Is `useTranslation` properly mocked using the project's test runner (vi.mock/jest.mock/etc.)?
+- If no test file exists: was this noted in the processor's report?
 
 ## Memory
 
@@ -72,4 +84,4 @@ As you review files, update your agent memory with patterns you discover:
 
 - **APPROVED**: All checks pass, replacements are correct
 - **ISSUES FOUND**: List each issue with category, file location, what's wrong, and suggested fix
-  - Categories: `key_incorrect`, `param_mismatch`, `invented_key`, `missing_import`, `missed_string`, `broken_jsx`
+  - Categories: `key_incorrect`, `param_mismatch`, `invented_key`, `missing_import`, `missed_string`, `broken_jsx`, `destructive_replacement`
