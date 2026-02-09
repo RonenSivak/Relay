@@ -84,7 +84,7 @@ All one-time initialization. Runs once before any tasks are dispatched.
 
 ### 1.2 Environment Check
 
-1. **Validate BI Catalog MCP** — test with `bi-catalog-mcp:get_evid_schema` (src: 61, evid: 1)
+1. **Validate BI Catalog MCP (REQUIRED)** — call `bi-catalog-mcp:get_evid_schema` with a known event (src: 61, evid: 1). **If this fails, STOP the entire workflow** and tell the user to configure the MCP server (see Prerequisites). Do not attempt to proceed without it.
 2. **Detect existing BI packages** — `grep -r "@wix/bi-logger-" package.json packages/*/package.json`
 3. **Detect testing framework** — Jest, Vitest, RTL
 4. **Detect existing BI wrappers** — search for `use*Bi*` hooks, shared logger patterns
