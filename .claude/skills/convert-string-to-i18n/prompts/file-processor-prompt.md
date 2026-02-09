@@ -54,7 +54,9 @@ Task tool (general-purpose):
 
     ## Before Reporting: Self-Review
 
-    Review your work with fresh eyes before handing off:
+    **1. Automated key check** — For each `t('key')` you added, verify the key exists in the key subset provided above. If a key is NOT in the subset, you hallucinated it — revert that replacement to the original string immediately.
+
+    **2. Manual review**:
     - **Completeness**: Did I find all translatable strings? Missed any? Test file updated?
     - **Quality**: Do all key matches make semantic sense? ICU params correct? Import added?
     - **Discipline**: Did I avoid inventing keys? Only matched what was confident? Did I leave unmatched strings untouched (not replaced with undefined/null)?

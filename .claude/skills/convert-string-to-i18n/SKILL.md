@@ -9,7 +9,9 @@ Replace hard-coded UI text with existing Babel translation keys. Produces plan.m
 
 ## Execution Strategy
 
-**Run to completion.** Do not stop to ask "should I continue?" between files, batches, or steps. The entire workflow (discover → plan → execute → verify) must run autonomously in a single pass. Only pause for user input when explicitly required (parallelism strategy question in Step 2) or when a genuine ambiguity blocks progress.
+**ONE-SHOT EXECUTION — THIS IS NON-NEGOTIABLE.**
+
+Complete the entire workflow (Step 1 → 2 → 3 → 4) in a single uninterrupted pass. Do NOT stop after a step, pause between files/batches, or ask "should I continue?". The only pause point is Step 2's parallelism strategy question. Present results only after Step 4 passes — that's the first and only time you stop.
 
 **Parallel subagents by default.** Do NOT self-justify choosing direct mode — "I prefer direct mode" or "more control" are never valid reasons.
 
@@ -112,7 +114,7 @@ The script ([scripts/scan-ui-strings.cjs](scripts/scan-ui-strings.cjs)):
 
 Use the script output as the candidate file list. Do NOT manually grep — the script is faster and more consistent.
 
-**Output**: `Discovery — keys: <count> | framework: <type> | candidates: <n> files`
+**Output** (internal, do not present to user): `Discovery — keys: <count> | framework: <type> | candidates: <n> files` → **immediately proceed to Step 2.**
 
 ---
 
@@ -193,7 +195,7 @@ Before execution, ask the user:
 
 Exact counts depend on actual file count. Max concurrent subagents per batch is always 4 (platform limit). Fast with 8 runs 2 batches.
 
-**Output**: `Step 2 — candidates: <n> files | plan.md + def-done.md written | strategy: <choice>`
+**Output** (internal, do not present to user): `Step 2 — candidates: <n> files | plan.md + def-done.md written | strategy: <choice>` → **immediately proceed to Step 3.**
 
 ---
 
@@ -231,7 +233,9 @@ Repeat batches until no pending files remain. **Do not pause between batches to 
 
 > Only use when: (a) subagent failed with `resource_exhausted`, or (b) tasks are genuinely dependent and can't be parallelized. "I prefer direct mode" is not a valid reason.
 
-Process remaining files one at a time yourself. Follow these context management rules:
+Process remaining files one at a time yourself. **Process ALL files in sequence without pausing — do not stop after each file to ask "should I continue?".**
+
+Follow these context management rules:
 
 - **Keys**: Filter to ~20-30 keys from the relevant namespace per file
 - **Reference files**: Read `references/icu-guide.md` and `references/replacement-patterns.md` on-demand only when you encounter ICU params or unusual patterns (Trans, class components)
@@ -305,7 +309,7 @@ After replacing strings in a source file, update the corresponding test file:
 
 The mock makes `t(key)` return the key itself, so `getByText('verse.foo.save')` works. Always match the project's existing test patterns — don't assume a specific test runner.
 
-**Output**: `Step 3 — mode: <subagent|direct> | files: <n> | replaced: <total> | skipped: <total>`
+**Output** (internal, do not present to user): `Step 3 — mode: <subagent|direct> | files: <n> | replaced: <total> | skipped: <total>` → **immediately proceed to Step 4.**
 
 ---
 
@@ -317,14 +321,25 @@ The mock makes `t(key)` return the key itself, so `getByText('verse.foo.save')` 
 
 Run linter on all modified files. Fix new lint errors.
 
-### 4b. Verify def-done.md
+### 4b. Validate All Keys Exist (automated — not optional)
+
+**Programmatic check** — grep all `t('...')` keys from modified files and verify each exists in `messages_en.json`:
+
+```bash
+grep -rohP "t\(['\"]([^'\"]+)['\"]\)" <modified-files> | sort -u
+# For each key: grep -c '"<key>"' <path-to-messages_en.json>
+```
+
+If ANY key returns count 0 → **revert that replacement** (restore the original string), mark as `no_matching_key`. This catches hallucinated keys that AI-based review misses. Do NOT skip.
+
+### 4c. Verify def-done.md
 
 **Subagent mode**: Dispatch def-done-verifier using [prompts/def-done-verifier-prompt.md](prompts/def-done-verifier-prompt.md) with def-done.md, plan.md, modified file list, key index, framework type.
 
 **Direct mode**: Check each criterion yourself:
 
 1. **Every candidate file processed** — no files left as `pending` in plan.md
-2. **All keys exist** — grep `t('...')` calls, cross-reference against key index
+2. **All keys exist** — confirmed in 4b (automated grep). If you skipped 4b, do it now.
 3. **ICU parameters correct** — verify param names/count match ICU templates
 4. **useTranslation hook + import present** — in every modified file with `t()` calls
 5. **Correct framework import path** — matches detected framework
@@ -337,7 +352,7 @@ Run linter on all modified files. Fix new lint errors.
 
 If any criterion fails: fix the gap, re-check. Repeat until all pass.
 
-### 4c. Final Summary
+### 4d. Final Summary
 
 Once all criteria pass:
 
@@ -345,7 +360,7 @@ Once all criteria pass:
 2. Summary report: files processed, strings replaced/skipped, skip reasons breakdown
 3. Show notable skipped strings grouped by reason for user review
 
-**Output**: `Step 4 — lint: ok | def-done: PASS | done`
+**Output** (this is the ONLY point where you present results to the user): `Step 4 — lint: ok | def-done: PASS | done`
 
 ---
 
@@ -470,7 +485,7 @@ Skip files/strings that are **already using translations**:
 - Let processor self-review replace actual review (both are needed)
 - Default to 8 subagents just because "fast" was selected (8 is the ceiling, not target)
 - Skip asking the user for parallelism strategy (always ask before dispatch)
-- Stop between files/batches/steps to ask "should I continue?" — run to completion autonomously
+- Stop between files, batches, or steps to ask "should I continue?" or present intermediate results — the entire workflow is one-shot, the user sees results only at the end
 
 ## Error Handling
 
