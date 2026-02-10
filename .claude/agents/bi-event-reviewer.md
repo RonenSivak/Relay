@@ -42,16 +42,18 @@ For each event:
 - BI fires AFTER action success (not before, not on failure path)
 - All required fields passed to the BI call
 
-### 3. Field Propagation
-- Component props interface includes BI fields
+### 3. Field Propagation & Constants
+- Every dynamic field uses its classified source (props/state/context/computed)
+- Static properties imported from `BI_CONSTANTS` object — NOT hardcoded at call sites
+- Component props interface includes BI fields for `props`-sourced fields
 - Parent components pass BI fields down
-- Static properties are constants, dynamic are from component data
 
 ### 4. Test Assertions
 - Testkit imported BEFORE component import (critical for mocking)
+- Testkit event name pattern: `biTestKit.{eventNameCamelCase}Src{src}Evid{evid}`
 - `biTestKit.reset()` in `beforeEach`
 - Test case exists for each event
-- Correct testkit event name pattern used
+- Test is in the component's own test file OR nearest ancestor test that renders the component — NOT in an isolated BI-only test file
 
 ### 5. No Collateral Damage
 - No broken imports or syntax errors

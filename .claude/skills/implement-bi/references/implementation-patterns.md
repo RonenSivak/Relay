@@ -42,12 +42,10 @@ import type { ReportMenuUpdatedParams } from '@wix/bi-logger-menus';
 
 ```typescript
 // CORRECT
-import biTestKit from 'bi-logger-menus/testkit';
-// OR
-import biTestKit from 'bi-logger-menus/dist/src/testkit';
+import biTestKit from '@wix/bi-logger-menus/testkit/client';
 
-// WRONG
-import biTestKit from 'bi-logger-menus/testkit/client';
+// ALTERNATIVE (bare module alias — depends on project config)
+import biTestKit from 'bi-logger-menus/testkit';
 ```
 
 **Why `/v2`?** Tree-shaking, smaller bundles, official bi-schema-loggers standard.
@@ -194,19 +192,35 @@ interface MenuEditorProps {
 
 ---
 
-## Static Constants
+## Static Constants (MANDATORY)
 
-Use existing or create a constants file for static properties:
+**Never hardcode static values at BI call sites.** Centralize in a `BI_CONSTANTS` object.
+
+Use existing constants file or create one:
 
 ```typescript
+// src/constants/bi-constants.ts (or add to existing constants file)
 export const BI_CONSTANTS = {
   ORIGIN: 'menu-editor',
   APP_NAME: 'wix-menus',
 } as const;
 ```
 
-Map `staticProperties` from `EventorOutput` to these constants (using `.value`).
-Map `dynamicProperties` to component data sources (using `.description` as guidance).
+At the call site, import and use:
+
+```typescript
+import { BI_CONSTANTS } from '../constants/bi-constants';
+
+reportMenuUpdatedEvent({
+  origin: BI_CONSTANTS.ORIGIN,      // ✅ static from constants
+  appName: BI_CONSTANTS.APP_NAME,   // ✅ static from constants
+  menuId: props.menuId,             // ✅ dynamic from props
+  locationId: props.locationId,     // ✅ dynamic from props
+});
+```
+
+Map `staticProperties` from `EventorOutput` to `BI_CONSTANTS` entries (using `.value`).
+Map `dynamicProperties` to component data sources using the classified source (props/state/context/computed).
 
 ---
 

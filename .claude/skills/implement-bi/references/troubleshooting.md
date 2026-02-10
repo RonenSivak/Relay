@@ -84,12 +84,10 @@ biLoggerTestkit.setLoggerClientFactory(BiLoggerClientFactory);
 
 ```typescript
 // CORRECT
-import biTestKit from 'bi-logger-menus/testkit';
-// OR
-import biTestKit from 'bi-logger-menus/dist/src/testkit';
+import biTestKit from '@wix/bi-logger-menus/testkit/client';
 
-// WRONG
-import biTestKit from 'bi-logger-menus/testkit/client';
+// ALTERNATIVE (bare module alias)
+import biTestKit from 'bi-logger-menus/testkit';
 ```
 
 ### Testkit Not Intercepting Events

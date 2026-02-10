@@ -66,13 +66,20 @@ Example: event `crmCategoryChange` with `src: 189`, `evid: 1318` → `biTestKit.
 
 ---
 
-## CRITICAL: Enhance Existing Tests
+## CRITICAL: Test File Selection
 
-**NEVER create isolated BI test files.** Always add BI assertions to existing component test files.
+**NEVER create isolated BI-only test files.** Follow this order:
+
+1. **Component has own test file** → enhance it with BI assertions
+2. **No own test file, but a parent component's test renders this component** → add BI assertion in the parent's test file (e.g., test `EmptyState` BI from `MenusLobby.spec.tsx`)
+3. **No test file anywhere renders this component** → skip and flag as `missing_test_coverage`
 
 ```bash
-# Find existing tests
+# Find existing tests for the component
 find . -name "*.spec.ts*" -o -name "*.test.ts*" | grep -E "(ComponentName)"
+
+# If none found, search for parent tests that render the component
+grep -rl "ComponentName" --include="*.spec.*" --include="*.test.*" src/
 ```
 
 ---

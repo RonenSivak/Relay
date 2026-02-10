@@ -405,14 +405,16 @@ Uses `.claude/agents/i18n-*` agents: `i18n-file-processor` (bypassPermissions, i
 
 **CRITICAL**: File-processors must use `bypassPermissions` — background agents auto-deny permissions, so `acceptEdits` causes silent write failures. Dispatch up to 4 per batch in background. After each batch, verify files were modified (`git status`) before marking completed. Re-dispatch in foreground if unchanged.
 
-### Cursor (Task tool templates)
+### Cursor (Task tool)
 
-Uses `prompts/` directory templates with the Task tool (up to 4 parallel):
+Uses `Task` tool with dedicated i18n subagent types. Each type has built-in instructions — the `prompt` only needs task-specific context (file paths, keys, framework).
 
-- [prompts/discovery-prompt.md](prompts/discovery-prompt.md) — Discover files & keys (read-only, fast model)
-- [prompts/file-processor-prompt.md](prompts/file-processor-prompt.md) — Process one file
-- [prompts/translation-reviewer-prompt.md](prompts/translation-reviewer-prompt.md) — Review replacements
-- [prompts/def-done-verifier-prompt.md](prompts/def-done-verifier-prompt.md) — Final verification
+| Step | `subagent_type` | `readonly` | `model` | Prompt template |
+|------|----------------|------------|---------|----------------|
+| Discovery | `"i18n-discovery"` | `true` | `"fast"` | [discovery-prompt.md](prompts/discovery-prompt.md) |
+| File processor | `"i18n-file-processor"` | — | `"fast"` | [file-processor-prompt.md](prompts/file-processor-prompt.md) |
+| Reviewer | `"i18n-reviewer"` | `true` | — | [translation-reviewer-prompt.md](prompts/translation-reviewer-prompt.md) |
+| Verifier | `"i18n-verifier"` | `true` | — | [def-done-verifier-prompt.md](prompts/def-done-verifier-prompt.md) |
 
 ---
 

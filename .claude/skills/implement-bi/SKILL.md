@@ -127,9 +127,17 @@ For each event, call `bi-catalog-mcp:get_evid_schema({ src, evid })` — use par
 
 Use `schemaLoggers[0]` as preferred logger unless project already uses a different one.
 
-### 1.4 Install Logger Package
+### 1.4 Install Logger Package & Validate Functions
 
-If not already installed: `yarn add @wix/[logger-name]`. Verify function exists in package types. See [logger-setup.md](references/logger-setup.md).
+If not already installed: `yarn add @wix/[logger-name]`. See [logger-setup.md](references/logger-setup.md).
+
+**Validate every function name** from the schemas exists in the package:
+
+```bash
+grep -r "${functionName}" node_modules/@wix/${loggerPkg}/dist/types/
+```
+
+If function missing → `yarn up @wix/${loggerPkg}`. If still missing after update → check for typos, verify evid/src, escalate to [#bi-logger-support](https://wix.slack.com/archives/CS9BG540L).
 
 ### 1.5 Determine Wiring Strategy
 
@@ -147,15 +155,28 @@ For each event, find the target component:
 
 1. Use `interaction` + `description` for semantic search in `src/`
 2. Identify trigger points (onClick, onSubmit, etc.) matching the `interaction`
-3. If not found → flag for manual wiring with diagnostic info
+3. If found → record `{ path, confidence, triggerContext }`
+4. **If not found** → generate diagnostics before flagging:
+   - Directories scanned (e.g., `src/`, `packages/`)
+   - Alternative search terms: interaction verb, first 3 words of description, `${interaction.split(' ')[0]} handler`
+   - Troubleshooting tips: check non-standard directories, split compound interactions, look for wrapper/container components
+   - Try each alternative term before giving up
+   - Only flag for manual wiring if all alternatives fail — include the diagnostics in the flag so the user has actionable next steps
 
 ### 1.7 Field Mapping
 
-Separate fields into:
+Classify **every** field with a source **during analysis** — do not defer to subagents.
 
-- **Static** — constants from `staticProperties` (name → value)
-- **Dynamic** — inferred from component props/state/context using `dynamicProperties`
-- **Missing** — flag required fields that need manual implementation
+- **Static** — constants from `staticProperties`. Centralize in a `BI_CONSTANTS` object (use existing constants file or create one). Never hardcode static values at each call site.
+- **Dynamic** — for each `dynamicProperty`, commit to a source:
+  - `props` — passed from parent component
+  - `state` — local component state (useState, useReducer)
+  - `context` — React context or hook (useParams, useSelector, etc.)
+  - `computed` — derived at call site from other values
+  - Record the `inferredValue` (e.g., `props.menuId`, `state.selectedItems.length`)
+- **Missing** — required schema fields with no identifiable source → flag with field name, type, and suggested resolution
+
+This classification is passed to subagents so they wire fields correctly instead of guessing.
 
 ---
 
@@ -187,10 +208,12 @@ Group events that share the **same component** or **same shared hook** into a si
 - [ ] Every event's BI call is wired into the correct component at the correct trigger point
 - [ ] BI calls fire on actual described flow (after success, not before action)
 - [ ] All required BI fields are propagated through component tree
-- [ ] Static properties mapped to constants
-- [ ] Dynamic properties sourced from component props/state/context
-- [ ] Existing test files enhanced with BI assertions (no new isolated test files)
+- [ ] Every dynamic field has a committed source (props/state/context/computed)
+- [ ] Static properties centralized in BI_CONSTANTS (not hardcoded at call sites)
+- [ ] Testkit imported BEFORE component import in every test file
 - [ ] Testkit reset in beforeEach
+- [ ] Every event has a test assertion (own file or nearest ancestor test that renders the component)
+- [ ] Per-interaction validation: each event individually verified with path:line evidence
 - [ ] All tests pass (`yarn test`)
 - [ ] Lint clean (`yarn lint`)
 - [ ] TypeScript clean (`yarn tsc --noEmit`)
@@ -231,10 +254,23 @@ Use the `AskQuestion` tool to present a clickable choice (do NOT bundle with any
 1. Create/extend BI hook with `report[EventName]` method
 2. Wire hook into target component at correct trigger point
 3. Propagate missing BI fields through component tree
-4. Add BI test assertions to existing test file
+4. Add BI test assertions (see testing rules below)
 5. Self-review before reporting
 
-See [implementation-patterns.md](references/implementation-patterns.md) for import rules, wiring patterns, and field propagation. See [testing-guide.md](references/testing-guide.md) for testkit API and assertion patterns.
+See [implementation-patterns.md](references/implementation-patterns.md) for import rules, wiring patterns, and field propagation. See [testing-guide.md](references/testing-guide.md) for full testkit API and assertion patterns.
+
+### Testing Rules (inline — do not skip)
+
+These 4 rules are non-negotiable. Do NOT rely solely on the reference file.
+
+1. **Import order**: testkit BEFORE component import (required for mocking to work)
+2. **Reset**: `biTestKit.reset()` in `beforeEach` (prevents event leakage between tests)
+3. **Event name pattern**: `biTestKit.{eventNameCamelCase}Src{src}Evid{evid}` — e.g., `biTestKit.menuUpdatedSrc61Evid180`
+4. **Test file selection**:
+   - **Has own test file** → enhance it
+   - **No test file but parent renders this component** → add BI assertion in the nearest ancestor test file that renders it (e.g., test `EmptyState` BI from `MenusLobby.spec.tsx` if that's where it's rendered)
+   - **No test file and no parent test renders it** → skip and flag as `missing_test_coverage`
+   - **NEVER** create isolated BI-only test files
 
 ### Direct Mode (fallback)
 
@@ -248,12 +284,16 @@ Dispatch the def-done verifier — see [prompts/def-done-verifier-prompt.md](pro
 
 ### 4.1 Per-Interaction Validation
 
-For EACH event, verify:
+For EACH event individually (not a single pass/fail for the whole project), verify and record:
 
-1. Function exists in BI hook file
-2. BI call exists in component at correct trigger
-3. Test exists and covers the interaction
-4. Test passes when run
+1. `report[EventName]` function exists in hook file → record `hookPath:line`
+2. BI call exists in component at correct trigger → record `componentPath:line`
+3. Test assertion exists → record `testPath:line`
+4. Test passes when run → record pass/fail
+
+**Status per event**: `complete` | `missing-implementation` | `missing-tests` | `failed`
+
+Report must list each event with its status, paths, and line numbers. A flat "all tests pass" without per-event evidence is not acceptable — it hides skipped interactions.
 
 ### 4.2 Full QA
 

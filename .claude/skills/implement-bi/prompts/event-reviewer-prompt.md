@@ -50,17 +50,19 @@ Task tool:
        - Confirm BI fires AFTER action success (not before, not on failure)
        - Confirm all required fields are passed to the BI call
 
-    3. **Verify field propagation**
-       - Check component props interface includes BI fields
+    3. **Verify field propagation & constants**
+       - Check dynamic fields use their classified source (props/state/context/computed)
+       - Confirm static properties imported from `BI_CONSTANTS` — NOT hardcoded at call sites
+       - Check component props interface includes BI fields for `props`-sourced fields
        - Verify parent components pass BI fields down
-       - Confirm static properties are constants, dynamic are from component data
 
     4. **Verify test assertions**
        - Read the actual test file
        - Confirm testkit imported BEFORE component import
+       - Confirm testkit event name pattern: `biTestKit.{eventNameCamelCase}Src{src}Evid{evid}`
        - Confirm `biTestKit.reset()` in `beforeEach`
        - Confirm test case exists for each event
-       - Confirm assertion uses correct testkit event name pattern
+       - Confirm test is in component's own file or nearest ancestor test (NOT isolated BI-only file)
 
     5. **Check for collateral damage**
        - No broken imports or syntax errors
@@ -71,7 +73,7 @@ Task tool:
     ## Report
     - **APPROVED**: All checks pass for all events
     - **ISSUES FOUND**: List each issue with:
-      - Category (import-path | trigger-timing | missing-field | missing-test | collateral-damage)
+      - Category (import-path | trigger-timing | missing-field | missing-test | wrong-strategy | hardcoded-static | collateral-damage)
       - File and line
       - What's wrong
       - Fix suggestion

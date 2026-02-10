@@ -15,7 +15,7 @@ Previous subagents may have made mistakes, missed events, or reported incorrectl
 
 ## Your Job: Check Each Criterion
 
-The orchestrator provides: def-done.md content, plan.md content, list of modified files, logger package name, and shared hook path.
+The orchestrator provides: def-done.md content, plan.md content, list of modified files, logger package name, shared hook path, and BI_CONSTANTS file path.
 
 Go through every item in the Definition of Done. For each one, check the actual code and report PASS or FAIL with evidence.
 
@@ -41,13 +41,17 @@ Go through every item in the Definition of Done. For each one, check the actual 
 
 ### 5. Field propagation complete
 - All required schema fields reachable at BI call site
+- Dynamic fields use their classified source (props/state/context/computed)
+- Static properties imported from `BI_CONSTANTS` — NOT hardcoded at call sites
 - Props interfaces updated with BI fields
 - Parent components pass fields down
 - If any required field unreachable -> FAIL
 
 ### 6. Tests exist and are correct
-- Existing test files enhanced (no isolated BI test files created)
-- Testkit imported before component import
+- Each event has a test assertion in either its own test file OR the nearest ancestor test file that renders the component
+- No isolated BI-only test files created
+- Testkit imported BEFORE component import
+- Testkit event name pattern: `biTestKit.{eventNameCamelCase}Src{src}Evid{evid}`
 - `biTestKit.reset()` in `beforeEach`
 - Assertion for each event
 - If any event lacks a test -> FAIL
@@ -74,13 +78,22 @@ Go through every item in the Definition of Done. For each one, check the actual 
 ```
 # Def-Done Verification Report
 
+## Per-Interaction Validation
+
+| Event (evid/src) | Hook (path:line) | Component (path:line) | Test (path:line) | Status |
+|------------------|-------------------|----------------------|-------------------|--------|
+| eventName (234/11) | hooks/useBi.ts:42 | Component.tsx:87 | Component.spec.tsx:120 | complete |
+| eventName (235/11) | hooks/useBi.ts:55 | Other.tsx:33 | — | missing-tests |
+
+## Criteria Checklist
+
 | # | Criterion | Status | Evidence |
 |---|-----------|--------|----------|
 | 1 | Every event has report function | PASS/FAIL | [details] |
 | 2 | Import paths correct | PASS/FAIL | [details] |
 | 3 | Component wiring correct | PASS/FAIL | [details] |
 | 4 | BI fires at correct timing | PASS/FAIL | [details] |
-| 5 | Field propagation complete | PASS/FAIL | [details] |
+| 5 | Field propagation + constants | PASS/FAIL | [details] |
 | 6 | Tests exist and correct | PASS/FAIL | [details] |
 | 7 | Lint passes | PASS/FAIL | [details] |
 | 8 | TypeScript clean | PASS/FAIL | [details] |
