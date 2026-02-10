@@ -29,6 +29,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **figma-to-code** | Convert Figma designs to React code using WDS. Orchestrates Figma MCP, WDS MCP, Context7, wix-internal-docs | [SKILL.md](.cursor/skills/figma-to-code/SKILL.md) |
 | **adopt-subagent-flow** | Transform any skill to use adaptive parallel subagent architecture with plan.md, def-done.md, and automatic fallback | [SKILL.md](.claude/skills/adopt-subagent-flow/SKILL.md) |
 | **convert-string-to-i18n** | Adaptive replacement of hard-coded UI text with Babel translation keys. Tries parallel subagents, falls back to single-agent if model can't support it. plan.md + def-done.md verification. Supports ICU, Trans, withTranslation, 5 Wix i18n frameworks | [SKILL.md](.claude/skills/convert-string-to-i18n/SKILL.md) |
+| **new-skill** | Creates and updates agent skills following Anthropic's official conventions and Wix coding-agents-handbook best practices. Supports create (from scratch) and update (audit + fix) modes with optional brainstorming and subagent architecture | [SKILL.md](.claude/skills/new-skill/SKILL.md) |
 
 ## MCP Servers
 
