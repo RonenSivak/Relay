@@ -1,16 +1,17 @@
 ---
 name: new-skill
-description: Creates and updates agent skills following Anthropic's official conventions and Wix coding-agents-handbook best practices. Supports both create (new skill from scratch) and update (audit + fix existing skill) modes. Optional brainstorming and subagent architecture integration. Use when the user says "create skill", "new skill", "update skill", "audit skill", "fix skill conventions", "make a skill", or wants to build or improve an agent skill.
+description: Creates, updates, and converts agent skills following Anthropic's official conventions and Wix coding-agents-handbook best practices. Three modes — create (new skill from scratch), update (audit + fix existing skill), convert (transform a rule, command, or instruction file into a skill). Optional brainstorming and subagent architecture. Use when the user says "create skill", "new skill", "update skill", "audit skill", "convert rule", "convert command", "make this a skill", "migrate to skill", or wants to build, improve, or convert an agent skill.
 ---
 
 # New Skill
 
-Create or update agent skills following best practices from Anthropic's skill guide, the Wix coding-agents-handbook, and proven Relay patterns.
+Create, update, or convert agent skills following best practices from Anthropic's skill guide, the Wix coding-agents-handbook, and proven Relay patterns.
 
 ## Modes
 
 - **Create**: Build a new skill from scratch with proper structure, frontmatter, and conventions
 - **Update**: Audit an existing skill against conventions, report issues, apply fixes
+- **Convert**: Transform an existing rule (.mdc), command (.md), or instruction file into a proper skill
 
 Detect mode from user intent. If ambiguous, ask.
 
@@ -195,6 +196,119 @@ Run the full checklist from [references/checklist.md](references/checklist.md). 
 
 ---
 
+## Convert Mode
+
+Transform an existing rule, command, or instruction file into a proper agent skill.
+
+### Step 1 — Read Source
+
+Read the file the user points to. Detect its type:
+
+| Type | Detection | Source Patterns |
+|------|-----------|-----------------|
+| **Cursor rule** | `.mdc` extension, has YAML frontmatter with `description`/`globs`/`alwaysApply` | `.cursor/rules/*.mdc` |
+| **Cursor command** | `.md` in a commands directory, no YAML frontmatter | `.cursor/commands/*.md`, `commands/*.md` |
+| **Generic instruction** | Any other `.md` file with instructions/workflow content | Anywhere |
+
+### Step 2 — Choose Target Location
+
+Same as Create Mode Step 3. Use `AskQuestion` with the 5 location options (local/global Claude/Cursor + custom).
+
+### Step 3 — Choose Conversion Strategy
+
+Ask the user how to handle the body content. Use `AskQuestion`:
+
+| Option | Action |
+|--------|--------|
+| **Preserve exactly** | Copy body content verbatim — no reformatting, no changes. Best for well-structured content you want to keep as-is |
+| **Restructure to conventions** | Reorganize body to follow skill conventions (proper sections, examples, error handling). Better for rough instructions that need polish |
+
+### Step 4 — Discover Related Assets
+
+Scan the source file's directory and the file's content for related assets:
+
+- **Scripts**: `scripts/` subdirectory, or scripts referenced in the body
+- **References**: Other `.md` files referenced or in a `references/` subdirectory
+- **Assets**: Templates, configs, or other files referenced in the body
+- **Sibling rules/commands**: Other files in the same directory that are part of the same workflow
+
+Report what was found. Ask the user which related files to include.
+
+### Step 5 — Convert
+
+Build the skill directory with the appropriate conversion:
+
+**From Cursor rule (.mdc):**
+```markdown
+# Source frontmatter:
+# ---
+# description: What this rule does
+# globs:
+# alwaysApply: false
+# ---
+# Body content...
+
+# Becomes:
+---
+name: <derived-from-filename>
+description: <original description, enhanced with trigger phrases if needed>
+---
+# Body content... (preserved or restructured per Step 3)
+```
+
+Changes: Add `name`, keep or enhance `description`, remove `globs`/`alwaysApply`.
+
+**From Cursor command (.md):**
+```markdown
+# Source:
+# # Task: Do Something
+# Instructions here...
+
+# Becomes:
+---
+name: <derived-from-filename>
+description: <inferred from heading and content>
+---
+# Task: Do Something
+# Instructions here... (preserved or restructured per Step 3)
+```
+
+Changes: Add frontmatter with `name` and `description`, infer description from content.
+
+**From generic instruction file:**
+- Infer `name` from filename (kebab-case)
+- Infer `description` from content (first heading or first paragraph)
+- Add proper YAML frontmatter
+- Restructure body if user chose that option
+
+**Related assets**: Move discovered scripts, references, and assets into the skill directory structure:
+```
+<name>/
+  SKILL.md
+  scripts/      # Moved from source directory
+  references/   # Moved from source directory or extracted from body
+  assets/       # Templates, configs
+```
+
+### Step 6 — Post-Conversion Audit
+
+If user chose "Preserve exactly", run a quick audit against [references/conventions.md](references/conventions.md) and report suggestions (same as Update Mode). The user can then decide whether to apply them.
+
+If user chose "Restructure to conventions", the restructuring should already follow conventions. Verify against [references/checklist.md](references/checklist.md).
+
+### Step 7 — Cleanup
+
+Ask the user about the original file. Use `AskQuestion`:
+
+| Option | Action |
+|--------|--------|
+| **Delete original** | Remove the source file after conversion |
+| **Keep original** | Leave the source file in place |
+
+Present the final result: skill location, name, description, file structure, and any audit findings.
+
+---
+
 ## Conventions Reference
 
 For the full set of rules, read [references/conventions.md](references/conventions.md) on demand. Key points:
@@ -219,7 +333,10 @@ For the full set of rules, read [references/conventions.md](references/conventio
 
 ## Error Handling
 
-- **User unsure about requirements**: Recommend brainstorming (Step 1)
+- **User unsure about requirements**: Recommend brainstorming (Create Step 1)
 - **Skill too large**: Split into SKILL.md + references, suggest which sections to extract
 - **Subagent architecture unclear**: Explain when subagents help (parallelizable, repeatable units) vs. when they don't (simple linear workflows)
 - **Existing skill has no frontmatter**: Add it — this is Critical severity
+- **Convert: can't detect source type**: Ask the user what the file is (rule, command, or generic instructions)
+- **Convert: no description in rule**: Infer from body content, present to user for approval
+- **Convert: related assets unclear**: List all files in the source directory, let the user pick which to include
