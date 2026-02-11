@@ -199,7 +199,7 @@ const interceptor: InterceptionTypes.Handler = {
   // Intercept BEFORE request is sent
   execRequest({ url, resourceType }) {
     if (url.includes('/api/blocked')) {
-      return { action: InterceptionTypes.Actions.BLOCK_RESOURCE };
+      return { action: InterceptionTypes.Actions.ABORT };
     }
     return { action: InterceptionTypes.Actions.CONTINUE };
   },
@@ -224,19 +224,22 @@ const interceptor: InterceptionTypes.Handler = {
 **Usage in tests:**
 
 ```typescript
-const page = (
-  await sled.newPage({ authType: 'free-user', interceptors: [interceptor] })
-).page;
+const { page } = await sled.newPage({
+  user: 'test@wix.com',
+  interceptors: [interceptor],
+});
 ```
 
 **Sled 2 Actions:**
 
 | Action | Hook | Purpose |
 |--------|------|---------|
-| `MODIFY_RESOURCE` | `execResponse` | Modify response body/headers via `modify` callback |
-| `BLOCK_RESOURCE` | `execRequest` | Block the request entirely |
-| `REDIRECT` | `execRequest` | Redirect to different URL |
 | `CONTINUE` | Both | Pass through (default — always return this for non-matching URLs) |
+| `MODIFY_RESOURCE` | `execResponse` | Modify response body/headers via `modify` callback |
+| `INJECT_RESOURCE` | `execRequest` | Return a synthetic response (no network) |
+| `ABORT` | `execRequest` | Block/abort the request |
+| `REDIRECT` | `execRequest` | Redirect to different URL |
+| `MODIFY_REQUEST` | `execRequest` | Modify request headers before sending |
 
 ---
 

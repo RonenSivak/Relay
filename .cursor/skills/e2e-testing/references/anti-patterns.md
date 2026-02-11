@@ -19,8 +19,14 @@ Common mistakes and their better alternatives.
 | Skipping Storybook for visual coverage | Add `@wix/playwright-storybook-plugin` |
 | Manual snapshot tests for each story | Plugin auto-generates them |
 | Writing "is visible" tests when visual regression exists | Let Storybook handle appearance; E2E tests behavior |
-| One monolithic `setupApiMocks()` | `given.mockApi()` per-endpoint; each test mocks only what it needs |
-| Registering catch-all AFTER specific mocks | Playwright routes are LIFO — catch-all must be registered FIRST |
+| One monolithic `setupAllMocks()` | Each test provides only the interceptors/routes it needs |
+| Registering catch-all AFTER mocks (Playwright/Sled 3) | LIFO — catch-all must be registered FIRST |
+| Assuming LIFO ordering in Sled 2 | Sled 2 is **FIFO** — first interceptor to match wins |
+| `body: JSON.stringify(data)` in `route.fulfill()` | Use `json: data` directly — cleaner (Playwright) |
+| `route.continue()` to compose handlers | Use `route.fallback()` — `continue()` sends to network |
+| Mocking in `beforeAll` (shared state) | Mock in `beforeEach` or per-test for isolation |
+| Forgetting `{ action: Actions.CONTINUE }` in Sled 2 | Always return CONTINUE for non-matching URLs — otherwise handler silently blocks |
+| Mixing `page.route()` + `interceptionPipeline` on same URL | Pick one per URL pattern to avoid unpredictable behavior |
 | Builders with global counters | Stable defaults, no shared mutable state across tests |
 | Separate spec file per story variant | One consolidated spec per component, all variants |
 | Deriving story IDs from `name` property | IDs come from **export names** (kebab-cased) — always verify in Storybook |

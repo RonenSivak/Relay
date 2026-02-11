@@ -285,6 +285,156 @@ export const manyItems = (count: number, overrides?: Partial<Item>): Item[] =>
 
 ---
 
+## Sled 2 Variant (Puppeteer/Jest)
+
+For `@wix/sled-test-runner` projects. Uses `InterceptionTypes.Handler` (FIFO), Puppeteer `Page`, and Jest `describe`/`it`.
+
+### Base Driver (Sled 2)
+
+```typescript
+// drivers/app.driver.ts (Sled 2)
+import { InterceptionTypes } from '@wix/sled-test-runner';
+
+const BASE_URL = 'https://manage.wix.com/dashboard/msid/my-app';
+
+export class AppDriver {
+  private interceptors: InterceptionTypes.Handler[] = [];
+
+  reset() {
+    this.interceptors = [];
+  }
+
+  async createPage() {
+    const { page } = await sled.newPage({
+      user: 'test@wix.com',
+      interceptors: this.interceptors,
+    });
+    return page;
+  }
+
+  // === GIVEN — API mocking (chainable, FIFO ordering) ===
+
+  given = {
+    itemsLoaded: (items: Item[]) => {
+      this.interceptors.push({
+        execResponse({ url, method }) {
+          if (url.endsWith('/api/items') && method === 'GET') {
+            return {
+              action: InterceptionTypes.Actions.MODIFY_RESOURCE,
+              modify: () => ({
+                body: Buffer.from(JSON.stringify({ items })),
+              }),
+            };
+          }
+          return { action: InterceptionTypes.Actions.CONTINUE };
+        },
+      });
+      return this;
+    },
+
+    apiReturnsError: (endpoint: string) => {
+      this.interceptors.push({
+        execRequest({ url }) {
+          if (url.includes(`/api/${endpoint}`)) {
+            return {
+              action: InterceptionTypes.Actions.INJECT_RESOURCE,
+              responseCode: 500,
+              resource: Buffer.from(JSON.stringify({ error: 'Server Error' })),
+            };
+          }
+          return { action: InterceptionTypes.Actions.CONTINUE };
+        },
+      });
+      return this;
+    },
+  };
+}
+```
+
+### Page Driver (Sled 2)
+
+Uses Puppeteer selectors with `[data-hook]`. Pass `page` as parameter (stateless). No auto-wait -- use `waitForSelector`.
+
+```typescript
+// drivers/items-page.driver.ts (Sled 2 - Puppeteer)
+export class ItemsPageDriver {
+  get = {
+    itemRow: (page, itemId: string) => page.$(`[data-hook="item-row-${itemId}"]`),
+    emptyState: (page) => page.$('[data-hook="empty-state"]'),
+    createButton: (page) => page.$('[data-hook="create-btn"]'),
+    errorBanner: (page) => page.$('[data-hook="error-banner"]'),
+  };
+
+  is = {
+    emptyStateShown: async (page) => !!(await page.$('[data-hook="empty-state"]')),
+    createButtonVisible: async (page) => !!(await page.$('[data-hook="create-btn"]')),
+  };
+
+  when = {
+    clickCreate: async (page) => page.click('[data-hook="create-btn"]'),
+    waitForLoad: async (page) => page.waitForSelector('[data-hook="loaded"]'),
+    searchFor: async (page, text: string) => {
+      await page.click('[data-hook="search-input"]');
+      await page.type('[data-hook="search-input"]', text);
+    },
+  };
+}
+```
+
+### Spec (Sled 2)
+
+```typescript
+// items.sled.spec.ts
+import type { Page } from '@wix/sled-test-runner';
+import { AppDriver } from './drivers/app.driver';
+import { ItemsPageDriver } from './drivers/items-page.driver';
+import { anItem } from './items.builder';
+
+describe('Items Page', () => {
+  const appDriver = new AppDriver();
+  const itemsPage = new ItemsPageDriver();
+  let page: Page;
+
+  beforeEach(async () => {
+    appDriver.reset();
+  });
+
+  afterEach(async () => {
+    if (page) await page.close();
+  });
+
+  it('should display items list', async () => {
+    appDriver.given.itemsLoaded([anItem({ id: 'item-1' }), anItem({ id: 'item-2' })]);
+    page = await appDriver.createPage();
+    await page.goto(BASE_URL);
+    await itemsPage.when.waitForLoad(page);
+
+    expect(await itemsPage.get.itemRow(page, 'item-1')).not.toBeNull();
+    expect(await itemsPage.get.itemRow(page, 'item-2')).not.toBeNull();
+  });
+
+  it('should show empty state when no items', async () => {
+    appDriver.given.itemsLoaded([]);
+    page = await appDriver.createPage();
+    await page.goto(BASE_URL);
+    await itemsPage.when.waitForLoad(page);
+
+    expect(await itemsPage.is.emptyStateShown(page)).toBe(true);
+  });
+
+  it('should show error when API fails', async () => {
+    appDriver.given.apiReturnsError('items');
+    page = await appDriver.createPage();
+    await page.goto(BASE_URL);
+    await page.waitForSelector('[data-hook="error-banner"]');
+
+    expect(await page.$('[data-hook="error-banner"]')).not.toBeNull();
+  });
+});
+```
+
+---
+
 ## Standalone Playwright Variant
 
 For non-Sled projects, use `page.route()` instead of interception pipeline:
@@ -360,7 +510,9 @@ Writing E2E tests?
 │
 └─ No tests exist → Use BDD architecture
    │
-   ├─ Sled 3 → InterceptHandler + given.* on base driver
+   ├─ Sled 3 → InterceptHandler + interceptionPipeline (LIFO)
+   │
+   ├─ Sled 2 → InterceptionTypes.Handler + sled.newPage (FIFO)
    │
    └─ Standalone Playwright → page.route() + given.* on base driver
 ```

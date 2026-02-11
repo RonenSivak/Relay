@@ -17,11 +17,11 @@ Wix's internal E2E testing framework built on **Playwright**. Runs tests in a Ku
 | Execution | AWS Lambda | Kubernetes |
 | Config | `sled/sled.json` | `playwright.config.ts` with `defineSledConfig()` |
 | CLI | `npx sled-test-runner` | `sled-playwright test` |
-| Auth | Manual | Built-in `auth` fixture |
-| Visual testing | Custom implementation | Native Playwright screenshots |
-| Storybook | Custom config (`storybook-sled-e2e.json`) | `@wix/playwright-storybook-plugin` |
+| Auth | `sled.newPage({ user })` or `sled.loginAsUser()` | Built-in `auth` fixture |
+| Visual testing | `storybook_config` in sled.json (Sheshesh) | Native Playwright screenshots |
+| Storybook | `storybook_config` in sled.json | `@wix/playwright-storybook-plugin` |
 | File naming | `*.sled.spec.ts` | `*.sled3.spec.ts` or `*.spec.ts` |
-| Browser access | `global.__BROWSER__.newPage()` | `async ({ page }) =>` fixture |
+| Browser access | `sled.newPage()` | `async ({ page }) =>` fixture |
 
 ---
 
@@ -334,6 +334,8 @@ page.on('console', (msg) => console.log(msg.text()));
 
 **Only reference this if the project uses `@wix/sled-test-runner` v1.x/v2.x.**
 
+Sled 2 = **Jest + Puppeteer** on AWS Lambda. Common in `flow-editor` projects.
+
 ### Config (`sled/sled.json`)
 
 ```json
@@ -343,18 +345,30 @@ page.on('console', (msg) => console.log(msg.text()));
     "patterns": ["**/*.json", "**/*.min.js"]
   },
   "test_path_patterns": ["tests/**/*.spec"],
-  "sled_folder_relative_path_in_repo": "sled"
+  "sled_folder_relative_path_in_repo": "sled",
+  "bundle_tests": true
 }
 ```
 
+Additional config options: `artifact_id`, `base_urls_to_intercept_artifacts`, `totalSerialRetries` (1-5), `run_with_daos`, `storybook_config` (for visual tests), `artifactsUrlOverride`.
+
 ### Test Structure
+
+File naming: `*.sled.spec.ts`. Runner: Jest (`describe`/`it`/`beforeEach`/`afterEach`). Types: `/// <reference types="@wix/sled-test-runner" />`.
 
 ```typescript
 // feature.sled.spec.ts
+import type { Page } from '@wix/sled-test-runner';
+
 describe('Feature', () => {
-  let page;
-  beforeEach(async () => { page = await global.__BROWSER__.newPage(); });
-  afterEach(async () => { await page.close(); });
+  let page: Page;
+
+  beforeAll(async () => {
+    const result = await sled.newPage();
+    page = result.page;
+  });
+
+  afterAll(async () => { await page.close(); });
 
   it('should work', async () => {
     await page.goto('https://your-app.wix.com/feature');
@@ -366,13 +380,160 @@ describe('Feature', () => {
 });
 ```
 
+### Page Creation & Auth
+
+Use `sled.newPage()` for page creation (not `global.__BROWSER__` directly):
+
+```typescript
+// Basic -- no auth, no interceptors
+const { page } = await sled.newPage();
+
+// With user auth + interceptors
+const { page } = await sled.newPage({
+  user: 'wixqatest@gmail.com',
+  interceptors: [myInterceptor],
+});
+
+// With experiments
+const { page } = await sled.newPage({
+  experiments: [{ key: 'specs.my.experiment', val: 'true' }],
+});
+```
+
+**Auth options (prefer `user` or `loginAsUser`):**
+
+```typescript
+// Option 1: user email in newPage (preferred)
+const { page } = await sled.newPage({ user: 'test@wix.com' });
+
+// Option 2: loginAsUser after newPage
+const { page } = await sled.newPage();
+await sled.loginAsUser(page, 'test@wix.com');
+
+// Option 3: clone site with logged-in owner
+await sled.cloneSiteAndExecuteWithLoggedInOwner(
+  { sourceMetaSiteId },
+  async (page, { newMetaSiteId }) => { /* test body */ }
+);
+
+// Option 4: disposable member (for member flows)
+await sled.loginAsDisposableMemberToSite(page, 'https://site.wixsite.com/path');
+```
+
+**Note:** `authType: 'free-user'` is deprecated. Use `user` or `loginAsUser` instead.
+
+**BM apps:** Use `injectBMOverrides` from `@wix/yoshi-flow-bm/sled`:
+```typescript
+import { injectBMOverrides } from '@wix/yoshi-flow-bm/sled';
+await injectBMOverrides({ page, appConfig: require('../target/module-sled.merged.json') });
+```
+
+### Interceptors (FIFO)
+
+Sled 2 uses `InterceptionTypes.Handler` from `@wix/sled-test-runner` with two hooks:
+
+- `execRequest` -- before request is sent (for blocking/redirecting)
+- `execResponse` -- after response arrives (for modifying body/headers)
+
+**Ordering: FIFO** -- first interceptor to return `action !== CONTINUE` wins. Always return `{ action: Actions.CONTINUE }` for non-matching URLs or the handler silently blocks everything.
+
+```typescript
+import { InterceptionTypes } from '@wix/sled-test-runner';
+
+const interceptor: InterceptionTypes.Handler = {
+  execRequest({ url, resourceType }) {
+    if (url.includes('/api/blocked')) {
+      return { action: InterceptionTypes.Actions.ABORT };
+    }
+    return { action: InterceptionTypes.Actions.CONTINUE };
+  },
+  execResponse({ url, method }) {
+    if (url.endsWith('/api/v1/items') && method === 'GET') {
+      return {
+        action: InterceptionTypes.Actions.MODIFY_RESOURCE,
+        modify: ({ body }) => ({
+          body: Buffer.from(JSON.stringify({ items: [], total: 0 })),
+        }),
+      };
+    }
+    return { action: InterceptionTypes.Actions.CONTINUE };
+  },
+};
+
+// Wire into page creation
+const { page } = await sled.newPage({
+  user: 'test@wix.com',
+  interceptors: [interceptor],
+});
+```
+
+| Action | Hook | Purpose |
+|--------|------|---------|
+| `CONTINUE` | Both | Pass through (must return for non-matching URLs) |
+| `MODIFY_RESOURCE` | `execResponse` | Modify response body/headers via `modify` callback |
+| `INJECT_RESOURCE` | `execRequest` | Return a synthetic response (no network) |
+| `ABORT` | `execRequest` | Block/abort the request |
+| `REDIRECT` | `execRequest` | Redirect to another URL |
+| `MODIFY_REQUEST` | `execRequest` | Modify request headers before sending |
+
+### Waiting Patterns (No Auto-Wait)
+
+Puppeteer has **no auto-wait**. You must use explicit waits:
+
+```typescript
+await page.waitForSelector('[data-hook="loaded"]');          // Wait for element
+await page.waitForFunction(() => !document.querySelector('.loader')); // Custom condition
+await page.waitForNavigation({ waitUntil: 'networkidle0' }); // Navigation
+```
+
+Avoid `page.waitForTimeout()` -- it's flaky. Use `waitForSelector` or `waitForFunction`.
+
+### WDS Component Testkits
+
+```typescript
+import { ButtonTestkit, InputTestkit } from '@wix/design-system/dist/testkit/puppeteer';
+
+const button = await ButtonTestkit({ dataHook: 'submit-btn', page });
+await button.click();
+const isDisabled = await button.isDisabled();
+const text = await button.getText();
+```
+
 ### Running
 
 ```bash
-npx sled-test-runner              # Remote (cloud)
-npx sled-test-runner local        # Local
-npx sled-test-runner remote       # Explicit remote
+npx sled-test-runner                             # Remote (cloud)
+npx sled-test-runner local                       # Local debugging
+npx sled-test-runner remote                      # Explicit remote
+npx sled-test-runner --testPathPattern="feat"    # Filter by file/pattern
 ```
+
+### Debugging
+
+**Local mode flags:**
+
+| Flag | Short | Purpose |
+|------|-------|---------|
+| `--devtools` | `-d` | Open Puppeteer DevTools |
+| `--keep-browser-open` | `-k` | Keep browser open after test run |
+| `--slow-mo` | `-m` | Slow down Puppeteer actions |
+| `--run-in-band` | `-b` | Run tests serially (no worker pool) |
+| `--verbose` | `-v` | Extra logging output |
+| `--print-browser-logs` | `-l` | Print browser console logs |
+| `--headless` | `-h` | Run headless (default is headed locally) |
+| `--test-path-pattern` | `-f` | Filter tests by pattern |
+
+```bash
+npx sled-test-runner local -d -k               # DevTools + keep browser open
+npx sled-test-runner local -b -v -l             # Serial + verbose + browser logs
+npx sled-test-runner local -f "my-feature"      # Filter by pattern
+```
+
+**Remote debugging:** `npx sled-test-runner remote -d -f "spec"` opens Sled Cloud Debugger (test code + browser side by side).
+
+**Sled Dashboard:** Link provided in test output after runs -- shows test data, screenshots, and Cloud Debugger access.
+
+**Storybook:** Config via `storybook_config` key in `sled.json` (not a separate file). Uses Sheshesh for visual comparison.
 
 ---
 
@@ -389,7 +550,7 @@ npx sled-test-runner remote       # Explicit remote
 
 ```typescript
 // Sled 2: Jest + Puppeteer
-const page = await global.__BROWSER__.newPage();
+const { page } = await sled.newPage();
 await page.goto(url);
 await page.waitForSelector('[data-hook="el"]');
 await page.click('[data-hook="btn"]');
