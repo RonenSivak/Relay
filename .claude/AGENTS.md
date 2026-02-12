@@ -31,6 +31,7 @@ ALL workflows follow: **Clarify → Plan → Execute → VERIFY → Publish**
 | **convert-string-to-i18n** | Adaptive replacement of hard-coded UI text with Babel translation keys. Tries parallel subagents, falls back to single-agent if model can't support it. plan.md + def-done.md verification. Supports ICU, Trans, withTranslation, 5 Wix i18n frameworks | [SKILL.md](.claude/skills/convert-string-to-i18n/SKILL.md) |
 | **new-skill** | Creates, updates, and converts agent skills following Anthropic's conventions and Wix coding-agents-handbook. Three modes: create (from scratch), update (audit + fix), convert (rule/command/file to skill). Optional brainstorming and subagent architecture | [SKILL.md](.claude/skills/new-skill/SKILL.md) |
 | **e2e-testing** | E2E browser testing with Sled 2/3 or Playwright. Adaptive parallel subagents for detection, writing, and debugging. BDD driver pattern | [SKILL.md](.claude/skills/e2e-testing/SKILL.md) |
+| **sled3-testing** | Specialized Sled 3 E2E testing: full lifecycle with detection, setup, writing, debugging, visual regression, CI. Replaces e2e-testing for Sled 3 projects | [SKILL.md](.claude/skills/sled3-testing/SKILL.md) |
 
 ## MCP Servers
 
