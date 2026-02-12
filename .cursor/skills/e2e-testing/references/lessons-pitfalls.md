@@ -299,6 +299,89 @@ When refactoring existing code:
 - Scope of change is massive: every method signature + every test call site. Plan for this.
 - Instantiate drivers at `describe` scope (stateless), not in `beforeEach`
 
+## storiesToIgnoreRegex: The Silent Killer
+
+The regex `['.*']` in `storybookPlugin({ storiesToIgnoreRegex: ['.*'] })` matches every story ID. The plugin generates zero snapshot tests. This is often set during initial setup to avoid snapshot failures, then forgotten.
+
+**Audit checklist:**
+1. Read `playwright.config.ts` -> `storybookPlugin` -> `storiesToIgnoreRegex`
+2. If `['.*']` -> fix to `['.*--docs$', '.*-playground$']`
+3. Set `deleteOldTestFiles: true` to clean up orphaned test files
+4. Run tests to generate snapshot files
+5. Commit the generated `.spec.ts` files and `__snapshots__/` directory
+
+**Real Wix projects that do it right:**
+- invoices: `['.*--docs$', '.*-playground$']`
+- em/wix-emails: `['.*--docs$', '.*-playground$']`
+- form-client: `[EXCLUDE_FROM_VISUAL_TESTS_TAG]` (tag-based)
+- wix-chatbot: Positive regex to include only specific prefixes
+
+## Test Bloat: When More Tests Means Less Value
+
+Signs you're writing too many E2E tests:
+- More than 5 per component
+- Tests that only assert `isVisible` or `toBeVisible`
+- Tests named "should display X" or "should render Y"
+- Tests for input acceptance, maxlength, empty state without user flow
+- Tests for data-hook presence or container structure
+
+**Correct target: ~15 behavioral tests + auto-generated snapshots for a typical project.**
+
+## Catch-All API Blocking: No Real Calls Allowed
+
+E2E tests that make real API calls are:
+- **Flaky**: Backend availability, rate limits, and data changes cause random failures
+- **Slow**: Real network round-trips add seconds per test
+- **Unsafe**: Test data can leak to production, real mutations can corrupt state
+- **Unreproducible**: Different environments return different data
+
+**Solution: Block everything, mock explicitly.** Use the framework's canonical interception API:
+
+**Sled 3** -- `interceptionPipeline` (NOT `page.route`):
+```typescript
+// Base driver setup -- catch-all as LAST handler
+async setup(interceptionPipeline: any) {
+  interceptionPipeline.setup([
+    ...this.interceptors,  // specific mocks registered via given.*
+    {
+      id: 'catch-all-api-block',
+      pattern: /\/(api|_api)\//,
+      handler: () => ({ action: InterceptHandlerActions.ABORT }),
+    },
+  ]);
+}
+
+// given.* registers specific mocks (matched before catch-all)
+given.itemsLoaded(items) {
+  this.interceptors.push({
+    pattern: /\/api\/items/,
+    handler: () => ({
+      action: InterceptHandlerActions.INJECT_RESOURCE,
+      resource: Buffer.from(JSON.stringify({ items })),
+    }),
+  });
+  return this;
+}
+```
+
+**Sled 2** -- `InterceptionTypes.Handler` (catch-all LAST, FIFO):
+```typescript
+const catchAll: InterceptionTypes.Handler = {
+  execRequest: ({ url }) => url.match(/\/(api|_api)\//)
+    ? { action: InterceptionTypes.Actions.ABORT }
+    : { action: InterceptionTypes.Actions.CONTINUE },
+};
+// Pass to sled.newPage({ interceptors: [...specificMocks, catchAll] })
+```
+
+**Standalone Playwright** -- `page.route` (catch-all FIRST, LIFO):
+```typescript
+await page.route(/\/(api|_api)\//, route => route.abort('blockedbyclient'));
+await page.route('**/api/items', route => route.fulfill({ json: { items } }));
+```
+
+If a test fails with "net::ERR_BLOCKED_BY_CLIENT" or "Route aborted": the test is calling an unmocked endpoint. Fix: add the mock. Never remove the catch-all.
+
 ## Naming & Organization
 
 - Name test folders/files after **what they test**, not the test type (`checkout/` not `happyFlow/`)

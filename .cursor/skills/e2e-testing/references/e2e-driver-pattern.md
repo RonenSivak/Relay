@@ -51,7 +51,18 @@ export class AppDriver {
   }
 
   async setup(interceptionPipeline: any) {
-    interceptionPipeline.setup(this.interceptors);
+    // Catch-all API blocker as LAST handler (LIFO -- runs last = lowest priority)
+    const allHandlers: InterceptHandler[] = [
+      ...this.interceptors,
+      {
+        id: 'catch-all-api-block',
+        pattern: /\/(api|_api)\//,
+        handler: () => ({
+          action: InterceptHandlerActions.ABORT,
+        }),
+      },
+    ];
+    interceptionPipeline.setup(allHandlers);
   }
 
   // === Navigation ===
@@ -305,9 +316,20 @@ export class AppDriver {
   }
 
   async createPage() {
+    // Catch-all API blocker as LAST interceptor (FIFO -- last = lowest priority)
+    const catchAllBlocker: InterceptionTypes.Handler = {
+      execRequest({ url }) {
+        if (url.match(/\/(api|_api)\//)) {
+          return { action: InterceptionTypes.Actions.ABORT };
+        }
+        return { action: InterceptionTypes.Actions.CONTINUE };
+      },
+    };
+    const allInterceptors = [...this.interceptors, catchAllBlocker];
+
     const { page } = await sled.newPage({
       user: 'test@wix.com',
-      interceptors: this.interceptors,
+      interceptors: allInterceptors,
     });
     return page;
   }
@@ -477,6 +499,9 @@ export class AppDriver {
   private _mocks: Array<(page: Page) => Promise<void>> = [];
 
   async setup(page: Page) {
+    // Catch-all API blocker FIRST (LIFO -- first registered = lowest priority)
+    await page.route(/\/(api|_api)\//, route => route.abort('blockedbyclient'));
+    // Then install specific mocks (these override the catch-all via LIFO)
     for (const mock of this._mocks) {
       await mock(page);
     }

@@ -33,3 +33,8 @@ Common mistakes and their better alternatives.
 | Running visual tests on stale `storybook-static` | Rebuild Storybook after adding/renaming stories |
 | `npx playwright test` with `defineSledConfig` | Must use `sled-playwright test` — sled config crashes raw Playwright CLI |
 | Builders only in E2E directory | Share builders in `src/test/builders/` across unit + E2E |
+| `storiesToIgnoreRegex: ['.*']` | `['.*--docs$', '.*-playground$']` -- selective exclusion |
+| 10+ tests per component | 2-4 behavioral tests -- visibility is for snapshots |
+| Separate test for each button visible + enabled | One test: click button -> verify result |
+| No catch-all API blocking in base driver | `await page.route('**/api/**', route => route.abort('blockedbyclient'))` in `setup()` BEFORE mocks |
+| Test passes without any `given.*` mocks | Every test MUST mock all API endpoints it touches via `given.*` |
